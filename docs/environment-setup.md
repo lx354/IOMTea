@@ -13,7 +13,8 @@
 5. [安装 Docker（备选方案）](#5-安装-docker备选方案)
 6. [安装 OpenCode（可选）](#6-安装-opencode可选)
 7. [验证环境](#7-验证环境)
-8. [常见问题](#8-常见问题)
+8. [Git 快速入门](#8-git-快速入门)
+9. [常见问题](#9-常见问题)
 
 ---
 
@@ -296,9 +297,49 @@ opencode --version      # 应输出版本号
 
 如果全部通过，按照 README.md 的"一次启动流程"即可启动系统。
 
+## 8. Git 快速入门
+
+Git 是版本管理工具，本仓库用它来管理代码版本。以下是最常用的几个操作。
+
+### 配置身份（首次使用需设置）
+
+```bash
+git config --global user.name "你的名字"
+git config --global user.email "你的邮箱@example.com"
+```
+
+### 常用命令
+
+| 场景 | 命令 |
+|------|------|
+| 查看当前文件改动 | `git status` |
+| 查看改了什么内容 | `git diff` |
+| 添加所有改动到暂存区 | `git add -A` |
+| 提交改动 | `git commit -m "描述改了什么"` |
+| 查看提交历史 | `git log --oneline` |
+| 推送到远程仓库 | `git push` |
+| 拉取远程最新代码 | `git pull` |
+
+### 一次完整的提交流程
+
+```bash
+git status          # 查看改了哪些文件
+git add -A          # 全部加入暂存区
+git commit -m "feat: 做了什么事"  # 提交到本地
+git push            # 推送到远程
+```
+
+### 如果只是想保存当前进度
+
+```bash
+git add -A
+git stash           # 暂存当前改动，工作区回到干净状态
+git stash pop       # 恢复暂存的改动
+```
+
 ---
 
-## 8. 常见问题
+## 9. 常见问题
 
 ### Q: `node --version` 显示的是旧版本
 
