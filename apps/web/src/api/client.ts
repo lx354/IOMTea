@@ -2,7 +2,7 @@ import axios from 'axios'
 import { decodeJwtPayload } from '../store/auth'
 import type { paths } from './types'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const http = axios.create({
   baseURL: API_BASE,
@@ -115,3 +115,58 @@ http.interceptors.response.use(
 
 export { http }
 export type { paths }
+
+// --- Twin Status Matrix API ---
+
+export interface PatientStatusResult {
+  patientId: string
+  patientName: string
+  overallState: 'stable' | 'watch' | 'alert' | 'emergency'
+  dimensions: Record<
+    string,
+    { value: number | string | null; status: 'normal' | 'warning' | 'critical' | 'no_data'; unit?: string }
+  >
+  timestamp: string
+}
+
+export interface TransitionRecord {
+  from: string
+  to: string
+  triggerMetric: string
+  timestamp: string
+}
+
+export interface TimeseriesParams {
+  metrics?: string
+  start?: string
+  end?: string
+}
+
+export interface StateLabel {
+  timestamp: string
+  state: string
+  duration: number | null
+}
+
+export async function fetchStatusMatrix(): Promise<PatientStatusResult[]> {
+  const { data } = await http.get('/twin/status-matrix')
+  return data as PatientStatusResult[]
+}
+
+export async function fetchPatientTransitions(patientId: string): Promise<TransitionRecord[]> {
+  const { data } = await http.get(`/twin/state-transitions/${patientId}`)
+  return data as TransitionRecord[]
+}
+
+export async function fetchPatientTimeseries(
+  patientId: string,
+  params?: TimeseriesParams,
+): Promise<Record<string, unknown>[]> {
+  const { data } = await http.get(`/twin/ml-timeseries/${patientId}`, { params })
+  return data as Record<string, unknown>[]
+}
+
+export async function fetchPatientStateLabels(patientId: string): Promise<StateLabel[]> {
+  const { data } = await http.get(`/twin/state-labels/${patientId}`)
+  return data as StateLabel[]
+}

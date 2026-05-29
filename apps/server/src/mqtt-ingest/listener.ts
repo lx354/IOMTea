@@ -25,6 +25,12 @@ function subscribeTopic(
   })
 }
 
+// MQTT 设备数据监听器
+// 订阅三个主题模式:
+//   1. users/{PIN}/{source}/{routeType} — 标准健康观测数据
+//   2. users/{PIN}/admin/{action}       — 设备管理命令（如 PIN 验证）
+//   3. iomtea/device/{id}/events       — 旧版设备事件
+// 收到消息后由 routeMessage 分发处理
 export function startMqttListener(
   brokerUrl: string,
   opts?: { username?: string; password?: string },

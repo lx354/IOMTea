@@ -103,6 +103,45 @@ export async function seedDemoData(db: DbClient): Promise<void> {
           tags: { simulated: true },
         })
       }
+
+      const isNight = hour >= 22 || hour <= 6
+      if (isNight) {
+        const nw = Math.random() < 0.3 ? Math.floor(Math.random() * 4) + 1 : 0
+        observationRows.push({
+          patientId,
+          kind: 'observation',
+          metric: 'night_wandering',
+          value: nw,
+          unit: '次/夜',
+          source: 'simulator',
+          recordedAt: ts,
+          tags: { simulated: true },
+        })
+      }
+      if (hour >= 8 && hour <= 20 && Math.random() < 0.15) {
+        observationRows.push({
+          patientId,
+          kind: 'observation',
+          metric: 'repetitive_behavior',
+          value: Math.floor(Math.random() * 5) + 1,
+          unit: 'score',
+          source: 'simulator',
+          recordedAt: ts,
+          tags: { simulated: true },
+        })
+      }
+      if (Math.random() < 0.1) {
+        observationRows.push({
+          patientId,
+          kind: 'observation',
+          metric: 'wandering_risk',
+          value: Math.floor(Math.random() * 6) + 1,
+          unit: 'score',
+          source: 'simulator',
+          recordedAt: ts,
+          tags: { simulated: true },
+        })
+      }
     }
   }
 

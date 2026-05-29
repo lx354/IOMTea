@@ -96,3 +96,25 @@ const BED_STATUSES = ['in_bed', 'out_of_bed', 'edge_of_bed'] as const
 export function generateBedStatus(): string {
   return BED_STATUSES[Math.floor(Math.random() * BED_STATUSES.length)]
 }
+
+const HOUR = () => new Date().getHours()
+
+export function generateNightWandering(_baseline: { mean: number; std: number }, _hour: number): number {
+  const h = HOUR()
+  const isNight = h >= 22 || h <= 6
+  if (!isNight) return 0
+  const raw = gaussian(1.5, 1.2)
+  return clamp(Math.round(raw), 0, 8)
+}
+
+export function generateRepetitiveBehavior(_baseline: { mean: number; std: number }, _hour: number): number {
+  const raw = gaussian(2, 1.5)
+  return clamp(Math.round(raw), 0, 10)
+}
+
+export function generateWanderingRisk(_baseline: { mean: number; std: number }, _hour: number): number {
+  const h = HOUR()
+  const base = h >= 10 && h <= 16 ? 3 : 1.5
+  const raw = gaussian(base, 1.5)
+  return clamp(Math.round(raw), 0, 10)
+}

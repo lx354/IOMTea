@@ -26,8 +26,8 @@ export function useRealtime({ patientId, onVitals, onAlert }: RealtimeOptions) {
     const token = localStorage.getItem('token')
     if (!token) return
 
-    const wsBase = import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
-    const url = `${wsBase}/ws?token=${token}${patientId ? `&patientId=${patientId}` : ''}`
+    const wsBase = import.meta.env.VITE_WS_URL || ''
+    const url = `${wsBase || ''}/ws?token=${token}${patientId ? `&patientId=${patientId}` : ''}`
     const ws = new WebSocket(url)
     wsRef.current = ws
 

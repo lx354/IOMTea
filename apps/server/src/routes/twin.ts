@@ -4,13 +4,16 @@ import {
   simulationResponseSchema,
   successSchema,
 } from '@iomtea/shared-types'
-import { eq } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { HTTPException } from 'hono/http-exception'
 import { db } from '../core/db'
-import { patients } from '../core/db/schema'
+import { events, patients } from '../core/db/schema'
 import type { AppEnv } from '../core/http/types'
+import { createChildLogger } from '../core/lib/logger'
 import { jwtAuth } from '../middleware/auth'
 import { requirePermission } from '../middleware/rbac'
+import { evaluatePatientState } from '../modules/twin/state-machine'
+import type { PatientStatusResult } from '../modules/twin/state-machine'
 import {
   addPatient,
   createSimulation,
@@ -27,6 +30,8 @@ import {
   toggleSimulation,
   updateMetric,
 } from '../modules/twin'
+
+const routeLogger = createChildLogger('twin-routes')
 
 const twinRouter = new OpenAPIHono<AppEnv>()
 
@@ -351,6 +356,376 @@ twinRouter.openapi(scenarioRoute, async (c) => {
   const body = c.req.valid('json')
   await injectScenario(db, c.req.param('id'), c.req.param('patientId'), body.type)
   return c.json({ success: true })
+})
+
+const statusMatrixRoute = createRoute({
+  method: 'get',
+  path: '/status-matrix',
+  tags: ['Twin'],
+  middleware: [jwtAuth, requirePermission('/twin', 'read')] as const,
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            patientId: z.string(),
+            patientName: z.string(),
+            overallState: z.enum(['stable', 'watch', 'alert', 'emergency']),
+            dimensions: z.record(z.object({ value: z.unknown(), status: z.enum(['normal', 'warning', 'critical', 'no_data']) })),
+            timestamp: z.string(),
+          })),
+        },
+      },
+      description: 'Patient status matrix',
+    },
+  },
+})
+twinRouter.openapi(statusMatrixRoute, async (c) => {
+  const activePatients = await db
+    .select({ id: patients.id, name: patients.name })
+    .from(patients)
+    .where(eq(patients.status, 'active'))
+
+  const results: Array<PatientStatusResult & { patientName: string }> = []
+
+  for (const patient of activePatients) {
+    const latestEvents = await db
+      .select({
+        metric: events.metric,
+        value: events.value,
+        unit: events.unit,
+        recordedAt: events.recordedAt,
+      })
+      .from(events)
+      .where(
+        and(
+          eq(events.patientId, patient.id),
+          eq(events.kind, 'observation'),
+        ),
+      )
+      .orderBy(desc(events.recordedAt))
+      .limit(200)
+
+    const vitals: Record<string, unknown> = {}
+    for (const evt of latestEvents) {
+      if (!(evt.metric in vitals)) {
+        vitals[evt.metric] = evt.value
+      }
+    }
+
+    const state = evaluatePatientState(patient.id, vitals)
+    results.push({ ...state, patientName: patient.name })
+  }
+
+  return c.json(results)
+})
+
+const stateTransitionsRoute = createRoute({
+  method: 'get',
+  path: '/state-transitions/:patientId',
+  tags: ['Twin'],
+  middleware: [jwtAuth, requirePermission('/twin', 'read')] as const,
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            id: z.string(),
+            metric: z.string(),
+            value: z.unknown(),
+            recordedAt: z.string(),
+          })),
+        },
+      },
+      description: 'State transition history',
+    },
+  },
+})
+twinRouter.openapi(stateTransitionsRoute, async (c) => {
+  const patientId = c.req.param('patientId')
+  const rows = await db
+    .select({
+      id: events.id,
+      metric: events.metric,
+      value: events.value,
+      recordedAt: events.recordedAt,
+    })
+    .from(events)
+    .where(
+      and(
+        eq(events.patientId, patientId),
+        eq(events.kind, 'state_transition'),
+      ),
+    )
+    .orderBy(desc(events.recordedAt))
+    .limit(50)
+
+  return c.json(
+    rows.map((r) => ({ ...r, recordedAt: r.recordedAt.toISOString() })),
+  )
+})
+
+const mlTimeseriesRoute = createRoute({
+  method: 'get',
+  path: '/ml-timeseries/:patientId',
+  tags: ['Twin'],
+  middleware: [jwtAuth, requirePermission('/twin', 'read')] as const,
+  request: {
+    query: z.object({
+      start: z.string().optional(),
+      end: z.string().optional(),
+      metrics: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            timestamp: z.string(),
+            metric: z.string(),
+            value: z.unknown(),
+            unit: z.string().nullable(),
+          })),
+        },
+      },
+      description: 'ML time-series data',
+    },
+  },
+})
+twinRouter.openapi(mlTimeseriesRoute, async (c) => {
+  const patientId = c.req.param('patientId')
+  const { start, end, metrics } = c.req.valid('query')
+
+  const conditions: ReturnType<typeof and>[] = [
+    eq(events.patientId, patientId),
+    eq(events.kind, 'observation'),
+  ]
+
+  if (start) conditions.push(gte(events.recordedAt, new Date(start)))
+  if (end) conditions.push(lte(events.recordedAt, new Date(end)))
+
+  if (metrics) {
+    const metricList = metrics.split(',').map((m) => m.trim()).filter(Boolean)
+    if (metricList.length > 0) {
+      conditions.push(inArray(events.metric, metricList))
+    }
+  }
+
+  const rows = await db
+    .select({
+      recordedAt: events.recordedAt,
+      metric: events.metric,
+      value: events.value,
+      unit: events.unit,
+    })
+    .from(events)
+    .where(and(...conditions))
+    .orderBy(desc(events.recordedAt))
+    .limit(1000)
+
+  return c.json(
+    rows.map((r) => ({
+      timestamp: r.recordedAt.toISOString(),
+      metric: r.metric,
+      value: r.value,
+      unit: r.unit,
+    })),
+  )
+})
+
+const mlExportRoute = createRoute({
+  method: 'get',
+  path: '/ml-export',
+  tags: ['Twin'],
+  middleware: [jwtAuth, requirePermission('/twin', 'write')] as const,
+  request: {
+    query: z.object({
+      format: z.enum(['csv', 'json']).default('json'),
+      start: z.string().optional(),
+      end: z.string().optional(),
+      patientId: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'ML data export',
+    },
+  },
+})
+twinRouter.openapi(mlExportRoute, async (c) => {
+  const { format, start, end, patientId } = c.req.valid('query')
+
+  const conditions: ReturnType<typeof and>[] = []
+
+  if (patientId) conditions.push(eq(events.patientId, patientId))
+  if (start) conditions.push(gte(events.recordedAt, new Date(start)))
+  if (end) conditions.push(lte(events.recordedAt, new Date(end)))
+
+  const rows = await db
+    .select({
+      patientId: events.patientId,
+      metric: events.metric,
+      value: events.value,
+      unit: events.unit,
+      recordedAt: events.recordedAt,
+      kind: events.kind,
+      source: events.source,
+    })
+    .from(events)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(events.recordedAt))
+    .limit(5000)
+
+  if (format === 'csv') {
+    const header = 'timestamp,patientId,kind,metric,value,unit,source'
+    const csvRows = rows.map(
+      (r) =>
+        `${r.recordedAt.toISOString()},${r.patientId},${r.kind},${r.metric},${typeof r.value === 'string' ? `"${r.value}"` : String(r.value ?? '')},${r.unit ?? ''},${r.source}`,
+    )
+    return c.text([header, ...csvRows].join('\n'), 200, {
+      'Content-Type': 'text/csv',
+      'Content-Disposition': 'attachment; filename="iomtea-export.csv"',
+    })
+  }
+
+  return c.json(rows)
+})
+
+const mlFeaturesRoute = createRoute({
+  method: 'post',
+  path: '/ml-features',
+  tags: ['Twin'],
+  middleware: [jwtAuth, requirePermission('/twin', 'write')] as const,
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            patientId: z.string(),
+            metric: z.string(),
+            window: z.number().min(1).max(1440).default(10),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            avg: z.number().nullable(),
+            min: z.number().nullable(),
+            max: z.number().nullable(),
+            trend: z.number().nullable(),
+            volatility: z.number().nullable(),
+            count: z.number(),
+          }),
+        },
+      },
+      description: 'Window aggregation features',
+    },
+  },
+})
+twinRouter.openapi(mlFeaturesRoute, async (c) => {
+  const { patientId, metric, window: windowMin } = c.req.valid('json')
+  const since = new Date(Date.now() - windowMin * 60 * 1000)
+
+  const rawValues = await db
+    .select({ value: events.value, recordedAt: events.recordedAt })
+    .from(events)
+    .where(
+      and(
+        eq(events.patientId, patientId),
+        eq(events.metric, metric),
+        gte(events.recordedAt, since),
+      ),
+    )
+    .orderBy(desc(events.recordedAt))
+
+  const numericValues: number[] = []
+  const timestamps: number[] = []
+  for (const r of rawValues) {
+    const v = typeof r.value === 'number' ? r.value : Number(r.value)
+    if (!isNaN(v)) {
+      numericValues.push(v)
+      timestamps.push(r.recordedAt.getTime())
+    }
+  }
+
+  const count = numericValues.length
+  if (count === 0) {
+    return c.json({ avg: null, min: null, max: null, trend: null, volatility: null, count: 0 })
+  }
+
+  const sum = numericValues.reduce((a, b) => a + b, 0)
+  const avg = sum / count
+  const min = Math.min(...numericValues)
+  const max = Math.max(...numericValues)
+
+  const variance = numericValues.reduce((acc, v) => acc + (v - avg) ** 2, 0) / count
+  const volatility = Math.sqrt(variance)
+
+  let trend: number | null = null
+  if (count >= 2) {
+    const meanT = timestamps.reduce((a, b) => a + b, 0) / count
+    const meanV = avg
+    const num = timestamps.reduce((acc, t, i) => acc + (t - meanT) * (numericValues[i] - meanV), 0)
+    const den = timestamps.reduce((acc, t) => acc + (t - meanT) ** 2, 0)
+    if (den !== 0) trend = num / den
+  }
+
+  return c.json({ avg, min, max, trend, volatility, count })
+})
+
+const stateLabelsRoute = createRoute({
+  method: 'get',
+  path: '/state-labels/:patientId',
+  tags: ['Twin'],
+  middleware: [jwtAuth, requirePermission('/twin', 'read')] as const,
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            timestamp: z.string(),
+            state: z.string(),
+            duration: z.number().nullable(),
+          })),
+        },
+      },
+      description: 'State labels for ML training',
+    },
+  },
+})
+twinRouter.openapi(stateLabelsRoute, async (c) => {
+  const patientId = c.req.param('patientId')
+
+  const rows = await db
+    .select({
+      value: events.value,
+      recordedAt: events.recordedAt,
+    })
+    .from(events)
+    .where(
+      and(
+        eq(events.patientId, patientId),
+        eq(events.kind, 'state_transition'),
+      ),
+    )
+    .orderBy(events.recordedAt)
+
+  const labels: Array<{ timestamp: string; state: string; duration: number | null }> = []
+  for (let i = 0; i < rows.length; i++) {
+    const state = typeof rows[i].value === 'string' ? rows[i].value : String(rows[i].value ?? '')
+    const ts = rows[i].recordedAt.toISOString()
+    const nextTs = i + 1 < rows.length ? rows[i + 1].recordedAt.getTime() : null
+    const duration = nextTs !== null ? (nextTs - rows[i].recordedAt.getTime()) / 1000 : null
+    labels.push({ timestamp: ts, state, duration })
+  }
+
+  return c.json(labels)
 })
 
 export { twinRouter }

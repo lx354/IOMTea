@@ -17,7 +17,7 @@ RUN npx turbo build --filter=@iomtea/server
 RUN pnpm --filter @iomtea/server deploy --prod /deploy
 
 FROM base AS runner
-RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache wget
 COPY --from=builder /deploy /app
 WORKDIR /app
 ENV NODE_ENV=production

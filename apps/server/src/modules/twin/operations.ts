@@ -192,6 +192,30 @@ const SCENARIOS: Record<
       status: 'active',
     },
   },
+  night_wandering: {
+    observation: { metric: 'night_wandering', value: 4, unit: '次/夜' },
+    alert: {
+      metric: 'night_wandering',
+      value: 4,
+      unit: '次/夜',
+      kind: 'alert',
+      severity: 'warning',
+      status: 'active',
+      tags: { behavior_type: 'night_wandering' },
+    },
+  },
+  wandering_escape: {
+    observation: { metric: 'wandering_risk', value: 8, unit: 'score' },
+    alert: {
+      metric: 'wandering_risk',
+      value: 8,
+      unit: 'score',
+      kind: 'alert',
+      severity: 'critical',
+      status: 'active',
+      tags: { behavior_type: 'wandering' },
+    },
+  },
 }
 
 export function injectScenario(

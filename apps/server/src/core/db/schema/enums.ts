@@ -22,6 +22,7 @@ export const kindEnum = pgEnum('kind', [
   'ema_response',
   'batch_record',
   'plan_earn',
+  'state_transition',
 ])
 
 export const userStatusEnum = pgEnum('user_status', ['active', 'disabled', 'pending'])
@@ -67,6 +68,7 @@ export type EventKind =
   | 'ema_response'
   | 'batch_record'
   | 'plan_earn'
+  | 'state_transition'
 
 export type UserStatus = 'active' | 'disabled' | 'pending'
 export type Gender = 'male' | 'female' | 'other'

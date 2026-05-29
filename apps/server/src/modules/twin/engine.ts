@@ -7,6 +7,7 @@ import * as phys from '../../core/pipeline/physiology.js'
 import { listProfiles, profiles } from './profiles.js'
 import type { MetricConfig, UnifiedProfile } from './profiles.js'
 import { MetricScheduler } from './scheduler.js'
+import { evaluatePatientState } from './state-machine.js'
 
 const logger = createChildLogger('twin-engine')
 
@@ -15,6 +16,7 @@ interface PatientRunner {
   patientName: string
   scheduler: MetricScheduler
   lastValues: Record<string, number>
+  lastState: string | null
   tickCount: number
 }
 
@@ -47,8 +49,13 @@ const generatorMap: Record<string, GeneratorFn> = {
   posture: (_baseline, _hour) => phys.generatePosture(),
   bedStatus: (_baseline, _hour) => phys.generateBedStatus(),
   motionIndex: (_baseline, _hour) => phys.generateMotionIndex(),
+  nightWandering: phys.generateNightWandering,
+  repetitiveBehavior: phys.generateRepetitiveBehavior,
+  wanderingRisk: phys.generateWanderingRisk,
 }
 
+// 将 metrics API 名称映射到 profile 的 baseline 字段
+// 例如 heart_rate → heartRate, systolic_bp → systolicBp
 function baselineKey(
   metric: string,
 ): keyof (typeof profiles)['elderly-cardiac']['baselines'] | null {
@@ -64,6 +71,9 @@ function baselineKey(
   return map[metric] ?? null
 }
 
+// 启动一个患者跑者的 tick 循环
+// 为 sim 配置的每个指标注册一个定时器，定时生成观测值并写入 events 表
+// 每次生成后评估患者综合状态，若状态变化则记录 state_transition 事件
 function startPatientRunner(
   dbc: DbClient,
   sim: Simulation,
@@ -74,7 +84,7 @@ function startPatientRunner(
   const simSpeed = sim.speed
   const globalSpeed = 1
   scheduler.setSpeed(simSpeed * globalSpeed)
-  const runner: PatientRunner = { patientId, patientName, scheduler, lastValues: {}, tickCount: 0 }
+  const runner: PatientRunner = { patientId, patientName, scheduler, lastValues: {}, lastState: null, tickCount: 0 }
   sim.patients.set(patientId, runner)
   patientSimMap.set(patientId, sim.id)
 
@@ -104,6 +114,22 @@ function startPatientRunner(
         recordedAt: new Date(),
         tags: { sim: true, simId: sim.id, profile: sim.profileName },
       })
+
+      const result = evaluatePatientState(patientId, r.lastValues)
+      if (result.overallState !== r.lastState && r.lastState !== null) {
+        dbc.insert(events).values({
+          patientId,
+          kind: 'state_transition',
+          metric: r.lastState,
+          value: result.overallState,
+          source: 'simulator',
+          recordedAt: new Date(),
+          tags: { sim: true, from: r.lastState, to: result.overallState },
+        }).catch((err: Error) => {
+          logger.warn({ err }, '状态转换写入失败')
+        })
+      }
+      r.lastState = result.overallState
     })
   }
 }

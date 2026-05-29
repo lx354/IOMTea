@@ -24,6 +24,7 @@ import { PinManagementPage } from './pages/PinManagementPage'
 import { PlanManagementPage } from './pages/PlanManagementPage'
 import { RbacManagementPage } from './pages/RbacManagementPage'
 import { SimulationPage } from './pages/SimulationPage'
+import { TwinStatusMatrix } from './pages/TwinStatusMatrix'
 import { UserManagementPage } from './pages/UserManagementPage'
 import { AuthLayout, authBeforeLoad } from './routes/-_auth'
 import { RootLayout } from './routes/__root'
@@ -126,6 +127,12 @@ const pinsRoute = createRoute({
   component: PinManagementPage,
 })
 
+const twinRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/twin',
+  component: TwinStatusMatrix,
+})
+
 const simRoute = createRoute({
   getParentRoute: () => authRoute,
   path: '/simulation',
@@ -181,6 +188,7 @@ const routeTree = rootRoute.addChildren([
     alertsRoute,
     pinsRoute,
     simRoute,
+    twinRoute,
     usersRoute,
     rbacRoute,
     nodeGraphRoute,

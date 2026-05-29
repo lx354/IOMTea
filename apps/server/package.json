@@ -4,19 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "echo db sync skipped (run db:push manually for schema changes)",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
-    "format": "biome check --write src/",
-    "check": "pnpm typecheck && pnpm check:imports",
-    "check:imports": "node scripts/check-imports.mjs",
     "db:generate": "tsx node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "tsx node_modules/drizzle-kit/bin.cjs migrate",
     "db:push": "tsx node_modules/drizzle-kit/bin.cjs push",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

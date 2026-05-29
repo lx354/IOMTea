@@ -194,7 +194,20 @@ async function handleHealthEvent(
   routeType: string,
   body: Record<string, unknown>,
 ): Promise<void> {
-  const normalized = parseHealthPayload(body)
+  const KNOWN_STRING_METRICS = new Set(['posture', 'bed_status'])
+  let normalized = parseHealthPayload(body)
+  if (!normalized) {
+    const rawMetric = typeof body.metric === 'string' ? body.metric.trim() : ''
+    if (rawMetric && KNOWN_STRING_METRICS.has(normalizeMetric(rawMetric))) {
+      normalized = {
+        metric: normalizeMetric(rawMetric),
+        value: body.value ?? null,
+        unit: resolveUnit(rawMetric, body.unit),
+        recordedAt: normalizeRecordedAt(body.recordedAt),
+        payloadSource: typeof body.source === 'string' ? body.source : undefined,
+      }
+    }
+  }
   if (!normalized) return
 
   const [pinRecord] = await db.select().from(usersPin).where(eq(usersPin.pin, pin)).limit(1)

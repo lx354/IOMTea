@@ -13,7 +13,7 @@ const envSchema = z.object({
   MQTT_BROKER: z.string().default('mqtt://localhost:1883'),
   MQTT_USERNAME: z.string().optional(),
   MQTT_PASSWORD: z.string().optional(),
-  MQTT_ENABLED: z.coerce.boolean().default(true),
+  MQTT_ENABLED: z.coerce.boolean().default(false),
   SUPER_ADMIN_USERNAME: z.string().optional(),
   SUPER_ADMIN_PASSWORD: z
     .string()

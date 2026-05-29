@@ -32,15 +32,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mosquitto:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@postgres:5432/iomtea
       JWT_SECRET: "${JWT_SECRET:-dev-secret-change-in-production}"
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-2h}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       PORT: "3000"
-      MQTT_ENABLED: "true"
+      MQTT_ENABLED: "${MQTT_ENABLED:-false}"
       MQTT_BROKER: "mqtt://mosquitto:1883"
       TCP_INGEST_PORT: "5858"
       TCP_INGEST_TOKEN: "${TCP_INGEST_TOKEN:-}"

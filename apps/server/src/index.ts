@@ -58,11 +58,11 @@ if (env.JWT_SECRET === 'dev-secret-change-in-production') {
 }
 
 // ============================================================
-// 应用初始化
+// 应用初始化 — 注册所有全局中间件与路由
 // ============================================================
 const app = new OpenAPIHono()
 
-// Global CORS
+// Global CORS：允许前端跨域访问
 app.use(
   '*',
   cors({
@@ -82,7 +82,7 @@ app.use(
 // 请求ID中间件 (x-request-id)
 app.use('*', requestId)
 
-// 全局错误处理
+// 全局错误处理 - 将 HTTPException 转为标准 JSON 错误响应
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
     return c.json({ error: err.message }, err.status)
@@ -91,7 +91,8 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500)
 })
 
-// ── REST API routes ──
+// ── REST API route mounting ──
+// 每个路由模块导出独立的 Hono OpenAPI router，在此处挂载到路径前缀
 app.route('/auth', auth)
 app.route('/users', usersRouter)
 app.route('/dashboard', dashboard)
@@ -108,7 +109,7 @@ app.route('/plans', plansRouter)
 app.route('/credits', creditsRouter)
 app.route('/forms', emaRouter)
 
-// OpenAPI spec (auto-collects from all mounted OpenAPIHono sub-apps)
+// OpenAPI spec — 自动聚合所有子路由的 Zod OpenAPI schema
 app.doc('/openapi.json', {
   openapi: '3.0.0',
   info: {
@@ -164,10 +165,17 @@ app.get('/', (c) =>
 )
 
 // ============================================================
-// 启动流程
+// 启动流程 — 服务初始化顺序：
+//   1. 数据库连接检查
+//   2. 默认演示账号（首次启动自动创建）
+//   3. 超级管理员（可选，通过环境变量配置）
+//   4. 初始数据种子（首次启动自动创建患者/事件/用药）
+//   5. RBAC 权限表初始化
+//   6. MQTT 设备接入（可选，通过环境变量控制）
+//   7. HTTP 服务器 + WebSocket 启动
 // ============================================================
 async function bootstrap() {
-  // ---- 数据库连接 ----
+  // ---- 1. 数据库连接 ----
   logger.info('正在连接数据库 ...')
   try {
     const result = await db.execute('SELECT 1 AS db_ok')
@@ -183,7 +191,20 @@ async function bootstrap() {
     process.exit(1)
   }
 
-  // ---- 超级管理员初始化 ----
+  // ---- 2. 默认演示账号 ----
+  // 空系统自动创建 demo/demo123，避免首次登录无账号可用
+  const existingUsers = await db.select({ id: users.id }).from(users).limit(1)
+  if (existingUsers.length === 0) {
+    await db.insert(users).values({
+      username: 'demo',
+      passwordHash: await hashPassword('demo123'),
+      displayName: '演示用户',
+      role: 'admin',
+    })
+    logger.info('√ 演示账号已创建 (demo / demo123)')
+  }
+
+  // ---- 3. 超级管理员（可选） ----
   if (env.SUPER_ADMIN_USERNAME && env.SUPER_ADMIN_PASSWORD) {
     const superAdmins = await db.select().from(users).where(eq(users.role, 'super_admin')).limit(1)
     if (superAdmins.length === 0) {
@@ -195,11 +216,10 @@ async function bootstrap() {
       })
       logger.info(`√ 超管账号已创建 (${env.SUPER_ADMIN_USERNAME})`)
     }
-  } else {
-    logger.warn('未配置 SUPER_ADMIN_USERNAME/PASSWORD，跳过超管初始化')
   }
 
-  // ---- 初始数据 ----
+  // ---- 4. 初始数据 ----
+  // 空患者表时自动写入种子数据（3位虚拟患者 + 48小时体征事件 + 告警 + 用药方案）
   try {
     const patientCount = await db.select().from(patients)
     if (patientCount.length === 0) {
@@ -210,7 +230,7 @@ async function bootstrap() {
     logger.warn({ err }, '初始数据种子失败 (可忽略)')
   }
 
-  // ---- 权限系统 ----
+  // ---- 5. RBAC 权限 ----
   try {
     await seedPermissions()
     logger.info('√ RBAC 权限已就绪')
@@ -218,12 +238,14 @@ async function bootstrap() {
     logger.warn({ err }, '权限种子失败 (请先执行 db:migrate)')
   }
 
-  // ---- 孪生引擎 ----
-  // (managed via REST /twin routes, no auto-start)
+  // ---- 6. 数字孪生引擎 ----
+  // 由 REST API (/twin) 管理，启动时不做自动启停
 }
 
+// bootstrap 完成后启动网络服务
 bootstrap().then(() => {
-  // ---- MQTT ----
+  // ---- MQTT 设备接入（可选） ----
+  // MQTT_ENABLED=false 时不启动，需使用硬件终端时再开启
   if (env.MQTT_ENABLED && env.MQTT_BROKER) {
     logger.info(`→ 正在连接 MQTT Broker ... (${env.MQTT_BROKER})`)
     try {
@@ -243,7 +265,9 @@ bootstrap().then(() => {
   // ---- HTTP 服务器 ----
   const server = serve({ fetch: app.fetch, port: env.PORT })
 
-  // ---- WebSocket ----
+  // ---- WebSocket 服务器 ----
+  // 挂载在 HTTP server 的 upgrade 事件上，路径为 /ws
+  // 客户端连接 ws://host:port/ws?token=<JWT>&wardId=<id>
   const wss = new WebSocketServer({ noServer: true })
 
   server.on('upgrade', (request, socket, head) => {
