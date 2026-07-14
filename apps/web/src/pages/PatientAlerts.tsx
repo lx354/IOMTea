@@ -23,10 +23,10 @@ export function PatientAlerts() {
   return (
     <Container py="md">
       <Title order={4} mb="xs">
-        患者告警
+        患者警告
       </Title>
       <Text size="xs" c="dimmed" mb="md">
-        共 {activeAlerts.length} 条活跃告警
+        共 {activeAlerts.length} 条活跃警告
       </Text>
       {activeAlerts.map((a) => (
         <Paper key={a.id} p="sm" mb="xs" withBorder>

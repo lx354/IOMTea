@@ -7,6 +7,10 @@ import {
 } from '@tanstack/react-router'
 import { NodeGraph } from './components/NodeGraph'
 import { AlertBoard } from './pages/AlertBoard'
+import { BehaviorMonitor } from './pages/BehaviorMonitor'
+import { ChatPanel } from './pages/ChatPanel'
+import { SuggestionsPanel } from './pages/SuggestionsPanel'
+import { MirrorPage } from './pages/MirrorPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DataDashboard } from './pages/DataDashboard'
 import { DataExportPage } from './pages/DataExportPage'
@@ -133,6 +137,30 @@ const twinRoute = createRoute({
   component: TwinStatusMatrix,
 })
 
+const chatRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/chat',
+  component: ChatPanel,
+})
+
+const behaviorRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/behavior',
+  component: BehaviorMonitor,
+})
+
+const suggestionsRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/suggestions',
+  component: SuggestionsPanel,
+})
+
+const mirrorRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/mirror',
+  component: MirrorPage,
+})
+
 const simRoute = createRoute({
   getParentRoute: () => authRoute,
   path: '/simulation',
@@ -189,6 +217,10 @@ const routeTree = rootRoute.addChildren([
     pinsRoute,
     simRoute,
     twinRoute,
+    chatRoute,
+    behaviorRoute,
+    suggestionsRoute,
+    mirrorRoute,
     usersRoute,
     rbacRoute,
     nodeGraphRoute,

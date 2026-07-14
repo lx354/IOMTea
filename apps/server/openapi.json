@@ -666,17 +666,108 @@
         }
       }
     },
-    "/dashboard/patient/:id": {
+    "/dashboard/recent-events": {
       "get": {
         "tags": [
           "Dashboard"
         ],
         "responses": {
           "200": {
-            "description": "Patient dashboard overview"
-          },
-          "404": {
-            "description": "Not found"
+            "description": "Recent events timeline"
+          }
+        }
+      }
+    },
+    "/dashboard/patient/:patientId/overview": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient overview data"
+          }
+        }
+      }
+    },
+    "/dashboard/suggestions/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Smart suggestions list"
+          }
+        }
+      }
+    },
+    "/dashboard/suggestions/:suggestionId/feedback": {
+      "post": {
+        "tags": [
+          "Dashboard"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "adopted",
+                      "dismissed",
+                      "expired"
+                    ]
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Feedback recorded"
+          }
+        }
+      }
+    },
+    "/dashboard/knowledge-graph": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Knowledge graph data"
+          }
+        }
+      }
+    },
+    "/dashboard/knowledge-graph/:caseId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Graph nodes for a case"
+          }
+        }
+      }
+    },
+    "/dashboard/fusion-score/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Fusion safety index"
           }
         }
       }
@@ -3385,6 +3476,950 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/twin/status-matrix": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient status matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "patientId": {
+                        "type": "string"
+                      },
+                      "patientName": {
+                        "type": "string"
+                      },
+                      "overallState": {
+                        "type": "string",
+                        "enum": [
+                          "stable",
+                          "watch",
+                          "alert",
+                          "emergency"
+                        ]
+                      },
+                      "dimensions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "normal",
+                                "warning",
+                                "critical",
+                                "no_data"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        }
+                      },
+                      "timestamp": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "patientId",
+                      "patientName",
+                      "overallState",
+                      "dimensions",
+                      "timestamp"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/state-transitions/:patientId": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "State transition history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "metric": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "nullable": true
+                      },
+                      "recordedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "metric",
+                      "recordedAt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/ml-timeseries/:patientId": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "start",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "end",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "metrics",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ML time-series data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "timestamp": {
+                        "type": "string"
+                      },
+                      "metric": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "nullable": true
+                      },
+                      "unit": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "timestamp",
+                      "metric",
+                      "unit"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/ml-export": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "default": "json"
+            },
+            "required": false,
+            "name": "format",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "start",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "end",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "patientId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ML data export"
+          }
+        }
+      }
+    },
+    "/twin/ml-features": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patientId": {
+                    "type": "string"
+                  },
+                  "metric": {
+                    "type": "string"
+                  },
+                  "window": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 1440,
+                    "default": 10
+                  }
+                },
+                "required": [
+                  "patientId",
+                  "metric"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Window aggregation features",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "avg": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "min": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "max": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "trend": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "volatility": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "avg",
+                    "min",
+                    "max",
+                    "trend",
+                    "volatility",
+                    "count"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/state-labels/:patientId": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "State labels for ML training",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "timestamp": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": "number",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "timestamp",
+                      "state",
+                      "duration"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/patient-profile/:patientId": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient chat profile association",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profileName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "displayName": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "profileName",
+                    "displayName"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/chat/profile/:profileName": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Chat personality profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profileName": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "age": {
+                      "type": "number"
+                    },
+                    "gender": {
+                      "type": "string"
+                    },
+                    "condition": {
+                      "type": "string"
+                    },
+                    "cognitiveLevel": {
+                      "type": "string"
+                    },
+                    "traits": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "speechStyle": {
+                      "type": "string"
+                    },
+                    "backstory": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "profileName",
+                    "displayName",
+                    "age",
+                    "gender",
+                    "condition",
+                    "cognitiveLevel",
+                    "traits",
+                    "speechStyle",
+                    "backstory"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Profile not found"
+          }
+        }
+      }
+    },
+    "/twin/chat/train/:profileName": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Training chat response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reply": {
+                      "type": "string"
+                    },
+                    "assessment": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "orientation": {
+                          "type": "string",
+                          "enum": [
+                            "good",
+                            "impaired"
+                          ]
+                        },
+                        "memory": {
+                          "type": "string",
+                          "enum": [
+                            "good",
+                            "impaired"
+                          ]
+                        },
+                        "mood": {
+                          "type": "string",
+                          "enum": [
+                            "calm",
+                            "anxious",
+                            "agitated",
+                            "depressed",
+                            "confused"
+                          ]
+                        },
+                        "behaviorIndicators": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "keyConcern": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "mmseEquivalent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "orientation",
+                        "memory",
+                        "mood",
+                        "behaviorIndicators",
+                        "keyConcern",
+                        "mmseEquivalent"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "reply",
+                    "assessment"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Profile not found"
+          }
+        }
+      }
+    },
+    "/twin/chat/train/:profileName/reset": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Training session reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/chat/:profileName/:patientId": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chat response with assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reply": {
+                      "type": "string"
+                    },
+                    "assessment": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "orientation": {
+                          "type": "string",
+                          "enum": [
+                            "good",
+                            "impaired"
+                          ]
+                        },
+                        "memory": {
+                          "type": "string",
+                          "enum": [
+                            "good",
+                            "impaired"
+                          ]
+                        },
+                        "mood": {
+                          "type": "string",
+                          "enum": [
+                            "calm",
+                            "anxious",
+                            "agitated",
+                            "depressed",
+                            "confused"
+                          ]
+                        },
+                        "behaviorIndicators": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "keyConcern": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "mmseEquivalent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "orientation",
+                        "memory",
+                        "mood",
+                        "behaviorIndicators",
+                        "keyConcern",
+                        "mmseEquivalent"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "reply",
+                    "assessment"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Patient or profile not found"
+          }
+        }
+      }
+    },
+    "/twin/chat/:profileName/:patientId/reset": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Session reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/chat/profiles": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Available chat profiles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "profileName": {
+                        "type": "string"
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "age": {
+                        "type": "number"
+                      },
+                      "gender": {
+                        "type": "string"
+                      },
+                      "traits": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "profileTag": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "profileName",
+                      "displayName",
+                      "age",
+                      "gender",
+                      "traits",
+                      "profileTag"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/twin/training/scenes": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Scene list"
+          }
+        }
+      }
+    },
+    "/twin/training/scenes/:sceneId/start": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "roleId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scene started"
+          }
+        }
+      }
+    },
+    "/twin/training/scenes/:sceneId/turn": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "actionType": {
+                    "type": "string"
+                  },
+                  "freeText": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "roleId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Turn result"
+          }
+        }
+      }
+    },
+    "/twin/posture/analyze": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "keypoints": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                },
+                "required": [
+                  "keypoints"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Posture analysis report"
+          }
+        }
+      }
+    },
+    "/twin/mirror/update": {
+      "post": {
+        "tags": [
+          "Twin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patientId": {
+                    "type": "string"
+                  },
+                  "keypoints": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "room": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "patientId",
+                  "keypoints"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mirror snapshot"
+          }
+        }
+      }
+    },
+    "/twin/mirror/:patientId": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Current mirror snapshot"
+          },
+          "404": {
+            "description": "No snapshot found"
+          }
+        }
+      }
+    },
+    "/twin/mirror": {
+      "get": {
+        "tags": [
+          "Twin"
+        ],
+        "responses": {
+          "200": {
+            "description": "All mirror snapshots"
           }
         }
       }

@@ -1,0 +1,30 @@
+{
+  "input_shape": [
+    1,
+    10,
+    11
+  ],
+  "output_size": 4,
+  "classes": [
+    "stable",
+    "watch",
+    "alert",
+    "emergency"
+  ],
+  "window_size": 10,
+  "feature_order": [
+    "heart_rate",
+    "spo2",
+    "temperature",
+    "systolic_bp",
+    "diastolic_bp",
+    "glucose",
+    "motion_index",
+    "posture",
+    "night_wandering",
+    "repetitive_behavior",
+    "wandering_risk"
+  ],
+  "python_model_file": "C:\\Users\\26620\\Desktop\\IOMTea\\ml\\train.py",
+  "accuracy": 0.9901
+}

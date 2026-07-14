@@ -50,15 +50,13 @@ export const HEALTH_MODULE_META: Record<
 }
 
 export const PATIENT_RELATIONS = [
-  'primary',
-  'spouse',
-  'child',
-  'parent',
-  'sibling',
-  'caregiver',
-  'doctor',
-  'nurse',
-  'admin',
-  'other',
+  'primary', 'spouse', 'child', 'parent', 'sibling',
+  'caregiver', 'doctor', 'nurse', 'admin', 'other',
 ] as const
 export type PatientRelation = (typeof PATIENT_RELATIONS)[number]
+
+export const DEVICE_TYPES = ['wearable', 'sensor', 'camera', 'other'] as const
+export type DeviceType = (typeof DEVICE_TYPES)[number]
+
+export const DEVICE_STATUSES = ['online', 'offline', 'maintenance'] as const
+export type DeviceStatus = (typeof DEVICE_STATUSES)[number]

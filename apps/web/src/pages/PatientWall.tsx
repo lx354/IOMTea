@@ -1,16 +1,6 @@
 import {
-  ActionIcon,
-  Badge,
-  Button,
-  Container,
-  Group,
-  Modal,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-  Tooltip,
+  ActionIcon, Badge, Button, Container, Group, Modal,
+  Select, Stack, Table, Text, TextInput, Title, Tooltip,
 } from '@mantine/core'
 import { IconEye, IconPlus } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
@@ -35,8 +25,10 @@ export function PatientWall() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [importOpen, setImportOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
-  const [newPatient, setNewPatient] = useState({ name: '', gender: '', birthDate: '', phone: '' })
+  const [newPatient, setNewPatient] = useState({ name: '', gender: '', birthDate: '', phone: '', profileId: '' })
   const createPatient = usePost('/patients', ['patients'])
+
+  const { data: profiles } = useGet<Array<{ profileName: string; displayName: string; traits: string[] }>>('/twin/chat/profiles')
   const navigate = useNavigate()
   const { refetch } = useGet<Patient[]>('/patients', { pageSize: 200 })
 
@@ -166,16 +158,28 @@ export function PatientWall() {
             value={newPatient.phone}
             onChange={(e) => setNewPatient({ ...newPatient, phone: e.currentTarget.value })}
           />
+          <Select
+            label="认知档案"
+            placeholder="选择认知障碍类型"
+            data={(profiles || []).map((p) => ({ value: p.profileName, label: `${p.traits?.[0] || p.profileName} (${p.displayName})` }))}
+            value={newPatient.profileId || null}
+            onChange={(v) => v && setNewPatient({ ...newPatient, profileId: v })}
+            clearable
+            searchable
+          />
           <Group justify="flex-end">
             <Button variant="subtle" onClick={() => setCreateOpen(false)}>
               取消
             </Button>
             <Button
               onClick={() => {
-                createPatient.mutate(newPatient as any, {
+                const payload: any = { ...newPatient }
+                if (newPatient.profileId) payload.tags = { profileId: newPatient.profileId }
+                delete payload.profileId
+                createPatient.mutate(payload, {
                   onSuccess: () => {
                     setCreateOpen(false)
-                    setNewPatient({ name: '', gender: '', birthDate: '', phone: '' })
+                    setNewPatient({ name: '', gender: '', birthDate: '', phone: '', profileId: '' })
                     refetch()
                   },
                 })

@@ -1,7 +1,7 @@
 import { pgEnum } from 'drizzle-orm/pg-core'
 
 // Existing enums (migrated from schema.ts with new values added)
-export const roleEnum = pgEnum('role', ['super_admin', 'admin', 'user'])
+export const roleEnum = pgEnum('role', ['super_admin', 'admin', 'family', 'nurse', 'doctor', 'user'])
 export const patientStatusEnum = pgEnum('patient_status', ['active', 'discharged', 'archived'])
 export const alertSeverityEnum = pgEnum('alert_severity', ['critical', 'warning', 'info'])
 export const alertStatusEnum = pgEnum('alert_status', [
@@ -48,7 +48,7 @@ export const transactionTypeEnum = pgEnum('transaction_type', ['earn', 'spend', 
 export const pinTypeEnum = pgEnum('pin_type', ['device', 'virtual', 'user', 'simulator'])
 
 // ── Type exports: single source of truth for strict TypeScript usage ──
-export type Role = 'super_admin' | 'admin' | 'user'
+export type Role = 'super_admin' | 'admin' | 'family' | 'nurse' | 'doctor' | 'user'
 export type PatientStatus = 'active' | 'discharged' | 'archived'
 export type AlertSeverity = 'critical' | 'warning' | 'info'
 export type AlertStatus =

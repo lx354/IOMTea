@@ -1,0 +1,59 @@
+.index {
+  padding: 40px 24px;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.title {
+  display: block;
+  font-size: 40px;
+  font-weight: 700;
+  color: #1677ff;
+}
+
+.subtitle {
+  display: block;
+  font-size: 28px;
+  color: #999;
+  margin-top: 8px;
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.card {
+  width: 46%;
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.card-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.card-desc {
+  display: block;
+  font-size: 24px;
+  color: #999;
+}

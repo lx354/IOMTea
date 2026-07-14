@@ -25,6 +25,9 @@ const envSchema = z.object({
   WECHAT_APP_ID: z.string().optional(),
   WECHAT_APP_SECRET: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
+  LLM_API_KEY: z.string().optional(),
+  LLM_BASE_URL: z.string().default('https://api.openai.com/v1'),
+  LLM_MODEL: z.string().default('gpt-4o-mini'),
 })
 
 export const env = envSchema.parse(process.env)

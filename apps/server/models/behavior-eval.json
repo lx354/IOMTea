@@ -1,0 +1,7 @@
+{
+  "accuracy": 0.6334,
+  "fall_recall": 0.67,
+  "fall_precision": 0.949,
+  "samples": 3500,
+  "timestamp": "2026-07-14 11:16:44"
+}

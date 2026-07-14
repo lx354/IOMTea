@@ -35,7 +35,7 @@ export function PatientAlertRules() {
     return (
       <Container py="md">
         <Text c="dimmed" ta="center" mt="xl">
-          暂无告警规则
+          暂无警告规则
         </Text>
       </Container>
     )
@@ -64,7 +64,7 @@ export function PatientAlertRules() {
       { id: pid, rules: localRules },
       {
         onSuccess: () => {
-          notifications.show({ title: '已保存', color: 'green', message: '告警规则已更新' })
+          notifications.show({ title: '已保存', color: 'green', message: '警告规则已更新' })
           refetch()
         },
         onError: () => {

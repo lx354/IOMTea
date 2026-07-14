@@ -1,4 +1,4 @@
-ï»¿import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
+import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import {
   profileResponseSchema,
   simulationResponseSchema,
@@ -8,6 +8,7 @@ import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { HTTPException } from 'hono/http-exception'
 import { db } from '../core/db'
 import { events, patients } from '../core/db/schema'
+import { simConfigs, simPatients } from '../core/db/schema/twin'
 import type { AppEnv } from '../core/http/types'
 import { createChildLogger } from '../core/lib/logger'
 import { jwtAuth } from '../middleware/auth'
@@ -18,6 +19,7 @@ import {
   addPatient,
   createSimulation,
   deleteSimulation,
+  getChatProfile,
   getProfile,
   getSimulation,
   getSimulations,
@@ -25,6 +27,7 @@ import {
   listProfiles,
   removePatient,
   renameSim,
+  sendChatMessage,
   setSpeed,
   toggleMetric,
   toggleSimulation,
@@ -32,6 +35,11 @@ import {
 } from '../modules/twin'
 
 const routeLogger = createChildLogger('twin-routes')
+
+const chatSessions = new Map<string, Array<{ role: 'user' | 'assistant'; content: string }>>()
+function sessionKey(patientId: string, userId: string) {
+  return `${patientId}:${userId}`
+}
 
 const twinRouter = new OpenAPIHono<AppEnv>()
 
@@ -726,6 +734,393 @@ twinRouter.openapi(stateLabelsRoute, async (c) => {
   }
 
   return c.json(labels)
+})
+
+// ©¤©¤ ¶Ô»°ÂÏÉú (Chat Twin) ©¤©¤
+
+const patientProfileRoute = createRoute({
+  method: 'get',
+  path: '/patient-profile/:patientId',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            profileName: z.string().nullable(),
+            displayName: z.string().nullable(),
+          }),
+        },
+      },
+      description: 'Patient chat profile association',
+    },
+  },
+})
+twinRouter.openapi(patientProfileRoute, async (c) => {
+  const { patientId } = c.req.param()
+
+  const [patient] = await db
+    .select({ tags: patients.tags })
+    .from(patients)
+    .where(eq(patients.id, patientId))
+    .limit(1)
+
+  const tagProfile = (patient?.tags as Record<string, unknown> | undefined)?.profileId as string | undefined
+  if (tagProfile) {
+    const profile = getChatProfile(tagProfile)
+    if (profile) {
+      return c.json({ profileName: tagProfile, displayName: profile.displayName })
+    }
+  }
+
+  const simResult = await db
+    .select({ profileName: simConfigs.profileName })
+    .from(simPatients)
+    .innerJoin(simConfigs, eq(simConfigs.id, simPatients.simId))
+    .where(eq(simPatients.patientId, patientId))
+    .orderBy(desc(simConfigs.createdAt))
+    .limit(1)
+
+  const profileName = simResult[0]?.profileName ?? null
+  if (!profileName) {
+    return c.json({ profileName: null, displayName: null })
+  }
+
+  const profile = getChatProfile(profileName)
+  return c.json({
+    profileName,
+    displayName: profile?.displayName ?? null,
+  })
+})
+
+const chatProfileRoute = createRoute({
+  method: 'get',
+  path: '/chat/profile/:profileName',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            profileName: z.string(),
+            displayName: z.string(),
+            age: z.number(),
+            gender: z.string(),
+            condition: z.string(),
+            cognitiveLevel: z.string(),
+            traits: z.array(z.string()),
+            speechStyle: z.string(),
+            backstory: z.string(),
+          }),
+        },
+      },
+      description: 'Chat personality profile',
+    },
+    404: { description: 'Profile not found' },
+  },
+})
+twinRouter.openapi(chatProfileRoute, async (c) => {
+  const profile = getChatProfile(c.req.param('profileName'))
+  if (!profile) throw new HTTPException(404, { message: 'Profile not found' })
+  const { systemPrompt, ...safe } = profile
+  return c.json(safe)
+})
+
+// ©¤©¤ ÑµÁ·Ä£Ê½£¨±ØÐëÔÚ chatRoute Ö®Ç°£¬±ÜÃâ±» /chat/:profileName/:patientId ÇÀÏÈÆ¥Åä£© ©¤©¤
+
+const chatTrainRoute = createRoute({
+  method: 'post',
+  path: '/chat/train/:profileName',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  request: {
+    body: { content: { 'application/json': { schema: z.object({ message: z.string().min(1).max(1000) }) } } },
+  },
+  responses: {
+    200: { content: { 'application/json': { schema: z.object({ reply: z.string(), assessment: z.nullable(z.object({
+      orientation: z.enum(['good', 'impaired']), memory: z.enum(['good', 'impaired']),
+      mood: z.enum(['calm', 'anxious', 'agitated', 'depressed', 'confused']),
+      behaviorIndicators: z.array(z.string()), keyConcern: z.string().nullable(), mmseEquivalent: z.number(),
+    })) }) } }, description: 'Training chat response' },
+    404: { description: 'Profile not found' },
+  },
+})
+twinRouter.openapi(chatTrainRoute, async (c) => {
+  const { profileName } = c.req.param()
+  const { message } = c.req.valid('json')
+  const userId = c.var.userId || 'anonymous'
+
+  const profile = getChatProfile(profileName)
+  if (!profile) throw new HTTPException(404, { message: 'Chat profile not found' })
+
+  const key = sessionKey(`train-${profileName}`, userId)
+  const history = chatSessions.get(key) || []
+
+  const result = await sendChatMessage(
+    `train-${profileName}`, profile.displayName, profileName,
+    { overallState: 'stable', abnormalDimensions: [], lastValues: {}, profileName, patientName: profile.displayName },
+    history, message,
+  )
+
+  history.push({ role: 'user', content: message })
+  history.push({ role: 'assistant', content: result.reply })
+  if (history.length > 40) history.splice(0, history.length - 40)
+  chatSessions.set(key, history)
+
+  return c.json(result)
+})
+
+const chatTrainResetRoute = createRoute({
+  method: 'post',
+  path: '/chat/train/:profileName/reset',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: { 200: { content: { 'application/json': { schema: successSchema } }, description: 'Training session reset' } },
+})
+twinRouter.openapi(chatTrainResetRoute, async (c) => {
+  const userId = c.var.userId || 'anonymous'
+  chatSessions.delete(sessionKey(`train-${c.req.param('profileName')}`, userId))
+  return c.json({ success: true })
+})
+
+const chatRoute = createRoute({
+  method: 'post',
+  path: '/chat/:profileName/:patientId',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string().min(1).max(1000),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            reply: z.string(),
+            assessment: z.object({
+              orientation: z.enum(['good', 'impaired']),
+              memory: z.enum(['good', 'impaired']),
+              mood: z.enum(['calm', 'anxious', 'agitated', 'depressed', 'confused']),
+              behaviorIndicators: z.array(z.string()),
+              keyConcern: z.string().nullable(),
+              mmseEquivalent: z.number(),
+            }).nullable(),
+          }),
+        },
+      },
+      description: 'Chat response with assessment',
+    },
+    404: { description: 'Patient or profile not found' },
+  },
+})
+twinRouter.openapi(chatRoute, async (c) => {
+  const { profileName, patientId } = c.req.param()
+  const { message } = c.req.valid('json')
+
+  const userId = c.var.userId || 'anonymous'
+
+  const [patient] = await db
+    .select({ name: patients.name })
+    .from(patients)
+    .where(eq(patients.id, patientId))
+    .limit(1)
+
+  if (!patient) throw new HTTPException(404, { message: 'Patient not found' })
+
+  const latestEvents = await db
+    .select({ metric: events.metric, value: events.value })
+    .from(events)
+    .where(and(eq(events.patientId, patientId), eq(events.kind, 'observation')))
+    .orderBy(desc(events.recordedAt))
+    .limit(200)
+
+  const lastValues: Record<string, number> = {}
+  for (const evt of latestEvents) {
+    if (!(evt.metric in lastValues) && typeof evt.value === 'number') {
+      lastValues[evt.metric] = evt.value
+    }
+  }
+
+  const state = evaluatePatientState(patientId, lastValues)
+  const abnormalDimensions = Object.entries(state.dimensions)
+    .filter(([, d]) => d.status === 'warning' || d.status === 'critical')
+    .map(([k]) => k)
+
+  const key = sessionKey(patientId, userId)
+  const history = chatSessions.get(key) || []
+
+  const result = await sendChatMessage(
+    patientId,
+    patient.name,
+    profileName,
+    {
+      overallState: state.overallState,
+      abnormalDimensions,
+      lastValues,
+      profileName,
+      patientName: patient.name,
+    },
+    history,
+    message,
+  )
+
+  history.push({ role: 'user', content: message })
+  history.push({ role: 'assistant', content: result.reply })
+  if (history.length > 40) history.splice(0, history.length - 40)
+  chatSessions.set(key, history)
+
+  return c.json(result)
+})
+
+const chatResetRoute = createRoute({
+  method: 'post',
+  path: '/chat/:profileName/:patientId/reset',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: {
+    200: { content: { 'application/json': { schema: successSchema } }, description: 'Session reset' },
+  },
+})
+
+twinRouter.openapi(chatResetRoute, async (c) => {
+  const { patientId } = c.req.param()
+  const userId = c.var.userId || 'anonymous'
+  chatSessions.delete(sessionKey(patientId, userId))
+  return c.json({ success: true })
+})
+
+const chatProfilesListRoute = createRoute({
+  method: 'get',
+  path: '/chat/profiles',
+  tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: {
+    200: { content: { 'application/json': { schema: z.array(z.object({
+      profileName: z.string(), displayName: z.string(), age: z.number(), gender: z.string(),
+      traits: z.array(z.string()), profileTag: z.string(),
+    })) } }, description: 'Available chat profiles' },
+  },
+})
+twinRouter.openapi(chatProfilesListRoute, async (c) => {
+  const { chatProfiles } = await import('../modules/twin/chat/chat-profiles')
+  return c.json(Object.values(chatProfiles).map((p) => ({
+    profileName: p.caseId,
+    displayName: p.displayName,
+    age: p.age,
+    gender: p.gender,
+    traits: [p.primaryType, ...(p.subtype ? [p.subtype] : []), ...(p.comorbidities || [])],
+    profileTag: p.primaryType,
+  })))
+})
+
+// ©¤©¤ ³¡¾°ÑµÁ· (Scenario Training) ©¤©¤
+
+const scenesListRoute = createRoute({
+  method: 'get', path: '/training/scenes', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: { 200: { description: 'Scene list' } },
+})
+twinRouter.openapi(scenesListRoute, async (c) => {
+  const { SCENES } = await import('../modules/twin/chat/scenarios')
+  return c.json(SCENES.map((s) => ({ id: s.id, name: s.name, description: s.description, applicableRoles: s.applicableRoles })))
+})
+
+const sceneStartRoute = createRoute({
+  method: 'post', path: '/training/scenes/:sceneId/start', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  request: { body: { content: { 'application/json': { schema: z.object({ roleId: z.string() }) } } } },
+  responses: { 200: { description: 'Scene started' } },
+})
+twinRouter.openapi(sceneStartRoute, async (c) => {
+  const { sceneId } = c.req.param()
+  const { roleId } = c.req.valid('json')
+  const userId = c.var.userId || 'anonymous'
+  const { startSession } = await import('../modules/twin/chat/conversation-sm')
+  const result = startSession(sceneId, roleId, userId)
+  if ('error' in result) throw new HTTPException(400, { message: result.error })
+  return c.json({ state: result.state, context: result.context })
+})
+
+const sceneTurnRoute = createRoute({
+  method: 'post', path: '/training/scenes/:sceneId/turn', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  request: { body: { content: { 'application/json': { schema: z.object({
+    roleId: z.string(), actionType: z.string().optional(), freeText: z.string().optional(),
+  }) } } } },
+  responses: { 200: { description: 'Turn result' } },
+})
+twinRouter.openapi(sceneTurnRoute, async (c) => {
+  const { sceneId } = c.req.param()
+  const { roleId, actionType, freeText } = c.req.valid('json')
+  const userId = c.var.userId || 'anonymous'
+  const { processTurn } = await import('../modules/twin/chat/conversation-sm')
+  const result = await processTurn(sceneId, roleId, userId, { actionType: actionType as any, freeText })
+  if ('error' in result) throw new HTTPException(400, { message: result.error })
+  return c.json(result)
+})
+
+// ©¤©¤ ×ËÌ¬·ÖÎö ©¤©¤
+
+const postureAnalyzeRoute = createRoute({
+  method: 'post', path: '/posture/analyze', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  request: { body: { content: { 'application/json': { schema: z.object({ keypoints: z.record(z.tuple([z.number(), z.number()])) }) } } } },
+  responses: { 200: { description: 'Posture analysis report' } },
+})
+twinRouter.openapi(postureAnalyzeRoute, async (c) => {
+  const { keypoints } = c.req.valid('json')
+  const { analyzePosture } = await import('../modules/twin/chat/posture-analyzer')
+  return c.json(analyzePosture(keypoints as any))
+})
+
+// ©¤©¤ ÐéÄâ¾µÏñ ©¤©¤
+
+const mirrorUpdateRoute = createRoute({
+  method: 'post', path: '/mirror/update', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  request: { body: { content: { 'application/json': { schema: z.object({
+    patientId: z.string(), keypoints: z.record(z.tuple([z.number(), z.number()])),
+    source: z.string().optional(), room: z.string().optional(),
+  }) } } } },
+  responses: { 200: { description: 'Mirror snapshot' } },
+})
+twinRouter.openapi(mirrorUpdateRoute, async (c) => {
+  const { patientId, keypoints, source, room } = c.req.valid('json')
+  const { updateMirror } = await import('../modules/twin/mirror')
+  return c.json(updateMirror(db, patientId, keypoints as any, source, room))
+})
+
+const mirrorGetRoute = createRoute({
+  method: 'get', path: '/mirror/:patientId', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: { 200: { description: 'Current mirror snapshot' }, 404: { description: 'No snapshot found' } },
+})
+twinRouter.openapi(mirrorGetRoute, async (c) => {
+  const { patientId } = c.req.param()
+  const { getMirror } = await import('../modules/twin/mirror')
+  const snap = getMirror(patientId)
+  if (!snap) throw new HTTPException(404, { message: 'No mirror data yet' })
+  return c.json(snap)
+})
+
+const mirrorAllRoute = createRoute({
+  method: 'get', path: '/mirror', tags: ['Twin'],
+  middleware: [jwtAuth] as const,
+  responses: { 200: { description: 'All mirror snapshots' } },
+})
+twinRouter.openapi(mirrorAllRoute, async (c) => {
+  const { getAllMirrors } = await import('../modules/twin/mirror')
+  return c.json(getAllMirrors())
 })
 
 export { twinRouter }

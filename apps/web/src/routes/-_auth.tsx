@@ -1,56 +1,43 @@
 import {
-  ActionIcon,
-  Anchor,
-  AppShell,
-  Breadcrumbs,
-  Burger,
-  Button,
-  Divider,
-  Group,
-  Modal,
-  NavLink,
-  Text,
-  ThemeIcon,
+  ActionIcon, Anchor, AppShell, Breadcrumbs, Button, Divider,
+  Group, Modal, NavLink, Text, ThemeIcon,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import {
-  IconAlertTriangle,
-  IconClipboardList,
-  IconClipboardText,
-  IconDashboard,
-  IconDownload,
-  IconFlask,
-  IconGitBranch,
-  IconKey,
-  IconLogout,
-  IconScreenShare,
-  IconShield,
-  IconUsers,
-  IconUsersGroup,
+  IconActivity, IconAlertTriangle, IconBrain,
+  IconBuildingFactory, IconChartBar, IconClipboardList, IconClipboardText,
+  IconDownload, IconGitBranch, IconKey, IconLayoutDashboard, IconLogout,
+  IconMessageCircle, IconSchool, IconShield, IconSparkles,
+  IconUsers, IconUsersGroup, IconVideo,
 } from '@tabler/icons-react'
 import { Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useAuthStore } from '../store/auth'
 
-interface NavItem {
-  label: string
-  icon: React.ElementType
-  path: string
-}
+interface NavItem { label: string; icon: React.ElementType; path: string }
+interface NavGroup { label: string; items: NavItem[]; roles: string[] }
 
-interface NavGroup {
-  label: string
-  items: NavItem[]
-  roles: string[]
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: '超管', admin: '管理员', family: '家属', nurse: '护理员', doctor: '医生', user: '用户',
+}
+const ROLE_COLORS: Record<string, string> = {
+  super_admin: 'yellow', admin: 'blue', family: 'teal', nurse: 'green', doctor: 'grape', user: 'gray',
 }
 
 const navGroups: NavGroup[] = [
   {
     label: '概览',
     items: [
-      { label: '工作台', icon: IconDashboard, path: '/' },
-      { label: '数据大屏', icon: IconScreenShare, path: '/data-dashboard' },
+      { label: '工作台', icon: IconLayoutDashboard, path: '/' },
+      { label: '虚拟镜像', icon: IconVideo, path: '/mirror' },
     ],
-    roles: ['super_admin', 'admin', 'user'],
+    roles: ['super_admin', 'admin', 'family', 'nurse', 'doctor'],
+  },
+  {
+    label: '数据大屏',
+    items: [
+      { label: '3D 数字孪生', icon: IconChartBar, path: '/data-dashboard' },
+    ],
+    roles: ['super_admin', 'admin', 'nurse', 'doctor'],
   },
   {
     label: '管理',
@@ -62,25 +49,38 @@ const navGroups: NavGroup[] = [
     roles: ['super_admin', 'admin'],
   },
   {
-    label: '告警',
+    label: '数字孪生',
     items: [
-      { label: '告警看板', icon: IconAlertTriangle, path: '/alerts' },
+      { label: '状态矩阵', icon: IconActivity, path: '/twin' },
+      { label: '对话孪生', icon: IconMessageCircle, path: '/chat' },
+      { label: '行为识别', icon: IconBrain, path: '/behavior' },
+      { label: '警告看板', icon: IconAlertTriangle, path: '/alerts' },
       { label: '关系图谱', icon: IconGitBranch, path: '/node-graph' },
+      { label: '智慧建议', icon: IconSparkles, path: '/suggestions' },
     ],
-    roles: ['super_admin', 'admin', 'user'],
+    roles: ['super_admin', 'admin', 'nurse', 'doctor'],
   },
   {
-    label: '数据',
-    items: [{ label: '数据导出', icon: IconDownload, path: '/data-export' }],
+    label: '模拟训练',
+    items: [
+      { label: '模拟工厂', icon: IconBuildingFactory, path: '/simulation' },
+    ],
     roles: ['super_admin', 'admin'],
   },
   {
-    label: '设备',
+    label: '照护工具',
+    items: [
+      { label: '场景训练', icon: IconSchool, path: '/chat' },
+    ],
+    roles: ['super_admin', 'admin', 'nurse'],
+  },
+  {
+    label: '设备与数据',
     items: [
       { label: 'PIN 管理', icon: IconKey, path: '/iot/pins' },
-      { label: '模拟工厂', icon: IconFlask, path: '/simulation' },
+      { label: '数据导出', icon: IconDownload, path: '/data-export' },
     ],
-    roles: ['super_admin', 'admin'],
+    roles: ['super_admin', 'admin', 'doctor'],
   },
   {
     label: '系统',
@@ -88,7 +88,7 @@ const navGroups: NavGroup[] = [
       { label: '用户管理', icon: IconUsersGroup, path: '/settings/users' },
       { label: '权限管理', icon: IconShield, path: '/settings/rbac' },
     ],
-    roles: ['super_admin'],
+    roles: ['super_admin', 'admin'],
   },
 ]
 
@@ -113,25 +113,7 @@ export function AuthLayout() {
   const role = useAuthStore((s) => s.role) ?? 'user'
 
   const visibleGroups = navGroups.filter((g) => g.roles.includes(role))
-  const allVisibleItems = visibleGroups.flatMap((g) => g.items)
-  const currentPage = allVisibleItems.find((item) =>
-    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path),
-  )
-
   const isActive = (path: string) => (path === '/' ? pathname === '/' : pathname.startsWith(path))
-
-  const buildBreadcrumbs = () => {
-    const segments = pathname.split('/').filter(Boolean)
-    if (segments.length === 0) return [{ label: '工作台', href: '/' }]
-    return [
-      { label: '工作台', href: '/' },
-      ...segments.map((seg, i) => ({
-        label: seg,
-        href: `/${segments.slice(0, i + 1).join('/')}`,
-      })),
-    ]
-  }
-  const crumbItems = buildBreadcrumbs()
 
   return (
     <AppShell
@@ -141,88 +123,57 @@ export function AuthLayout() {
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <ThemeIcon
-              size="lg"
-              radius="md"
-              variant="gradient"
-              gradient={{ from: 'matchaGreen', to: '#8EC15B' }}
-            >
-              <Text size="lg">🍵</Text>
-            </ThemeIcon>
-            <Text fw={700} size="lg">
-              IOMTea
-            </Text>
-            <Text size="sm" c="dimmed" visibleFrom="sm">
-              / {currentPage?.label ?? ''}
-            </Text>
-          </Group>
-          <ActionIcon variant="subtle" color="red" onClick={openLogoutModal}>
+          <Text size="xl">🍵</Text>
+          <Text fw={700} size="lg">IOMTea</Text>
+          <ActionIcon variant="subtle" color="red" onClick={openLogoutModal} visibleFrom="sm">
             <IconLogout size={18} />
           </ActionIcon>
         </Group>
       </AppShell.Header>
-      <AppShell.Navbar p="xs">
-        {visibleGroups.map((group, gi) => (
-          <div key={group.label}>
-            {gi > 0 && <Divider my="xs" />}
-            <Text size="xs" c="dimmed" fw={500} px="sm" pt="xs" pb={4}>
-              {group.label}
-            </Text>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.label}
-                label={item.label}
-                leftSection={<item.icon size={20} stroke={1.5} />}
-                active={isActive(item.path)}
-                onClick={() => navigate({ to: item.path })}
-                variant="light"
-                mb={2}
-              />
-            ))}
-          </div>
-        ))}
+      <AppShell.Navbar p="xs" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {visibleGroups.map((group, gi) => (
+            <div key={group.label}>
+              {gi > 0 && <Divider my={6} />}
+              <Text size="xs" c="dimmed" fw={600} px="sm" pt={4} pb={2} tt="uppercase">{group.label}</Text>
+              {group.items.map((item) => (
+                <NavLink key={item.label} label={item.label}
+                  leftSection={<item.icon size={18} stroke={1.5} />}
+                  active={isActive(item.path)}
+                  onClick={() => navigate({ to: item.path })}
+                  variant="light" mb={1} style={{ borderRadius: 6 }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div>
+          <Divider my="xs" />
+          <Group px="sm" py="xs" gap="sm" wrap="nowrap">
+            <ThemeIcon radius="xl" size="sm" color={ROLE_COLORS[role] || 'gray'} variant="light">
+              <IconUsers size={14} />
+            </ThemeIcon>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text size="xs" fw={500}>{ROLE_LABELS[role] || role}</Text>
+              <Text size="xs" c={ROLE_COLORS[role] || 'gray'}>{role}</Text>
+            </div>
+            <ActionIcon variant="subtle" color="red" size="sm" onClick={openLogoutModal} hiddenFrom="sm">
+              <IconLogout size={16} />
+            </ActionIcon>
+          </Group>
+        </div>
       </AppShell.Navbar>
       <AppShell.Main>
         <style>{pageStyles}</style>
         <div className="page-fade-in" style={{ minHeight: 'calc(100vh - 112px)' }}>
-          <Breadcrumbs mb="xs" px="md">
-            {crumbItems.map((crumb, i) =>
-              i < crumbItems.length - 1 ? (
-                <Anchor
-                  key={crumb.href}
-                  size="xs"
-                  c="dimmed"
-                  onClick={() => navigate({ to: crumb.href })}
-                >
-                  {crumb.label}
-                </Anchor>
-              ) : (
-                <Text key={crumb.href} size="xs" c="dimmed">
-                  {crumb.label}
-                </Text>
-              ),
-            )}
-          </Breadcrumbs>
           <Outlet />
         </div>
       </AppShell.Main>
-      <Modal opened={logoutModal} onClose={closeLogoutModal} title="确认退出" size="sm">
+      <Modal opened={logoutModal} onClose={closeLogoutModal} title="确认退出" size="sm" centered>
         <Text mb="lg">确定要退出登录吗？</Text>
         <Group justify="flex-end">
-          <Button variant="subtle" onClick={closeLogoutModal}>
-            取消
-          </Button>
-          <Button
-            color="red"
-            onClick={() => {
-              logout()
-              closeLogoutModal()
-            }}
-          >
-            确认退出
-          </Button>
+          <Button variant="subtle" onClick={closeLogoutModal}>取消</Button>
+          <Button color="red" onClick={() => { logout(); closeLogoutModal() }}>确认退出</Button>
         </Group>
       </Modal>
     </AppShell>
@@ -232,17 +183,11 @@ export function AuthLayout() {
 export const authBeforeLoad = ({ location }: { location: { href: string } }) => {
   const state = useAuthStore.getState()
   if (!state.token) throw redirect({ to: '/login', search: { redirect: location.href } })
-
   const adminRoutes = ['/patients', '/data-export', '/simulation', '/iot/pins', '/plans', '/forms']
   const superAdminRoutes = ['/settings/users', '/settings/rbac']
   const pathname = location.href || ''
-
-  if (superAdminRoutes.some((r) => pathname.startsWith(r)) && state.role !== 'super_admin') {
-    throw redirect({ to: '/' })
-  }
+  if (superAdminRoutes.some((r) => pathname.startsWith(r)) && state.role !== 'super_admin' && state.role !== 'admin') throw redirect({ to: '/' })
   if (adminRoutes.some((r) => pathname.startsWith(r))) {
-    if (state.role !== 'admin' && state.role !== 'super_admin') {
-      throw redirect({ to: '/' })
-    }
+    if (state.role !== 'admin' && state.role !== 'super_admin') throw redirect({ to: '/' })
   }
 }

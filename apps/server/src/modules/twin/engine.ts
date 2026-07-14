@@ -1,13 +1,21 @@
-import { eq } from 'drizzle-orm'
+import crypto from 'node:crypto'
+import { eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '../../core/db'
-import { events } from '../../core/db/schema.js'
-import { simConfigs } from '../../core/db/schema/twin.js'
+import { events, patients } from '../../core/db/schema.js'
+import { simConfigs, simPatients } from '../../core/db/schema/twin.js'
 import { createChildLogger } from '../../core/lib/logger'
 import * as phys from '../../core/pipeline/physiology.js'
-import { listProfiles, profiles } from './profiles.js'
+import { profiles } from './profiles.js'
 import type { MetricConfig, UnifiedProfile } from './profiles.js'
 import { MetricScheduler } from './scheduler.js'
 import { evaluatePatientState } from './state-machine.js'
+import { computeFusionScore } from '../suggestions/fusion-score.js'
+
+let initPredictor: (() => Promise<boolean>) | null = null
+let initBehaviorPredictor: (() => Promise<boolean>) | null = null
+let tryPredict: ((patientId: string) => Promise<string | null>) | null = null
+let pushPredictionRow: ((patientId: string, row: number[]) => void) | null = null
+let buildWindowRow: ((lastValues: Record<string, number>) => number[]) | null = null
 
 const logger = createChildLogger('twin-engine')
 
@@ -103,6 +111,7 @@ function startPatientRunner(
       const hour = new Date().getHours()
       const value = generator(baseline, hour)
       r.lastValues[m.name] = typeof value === 'number' ? value : 0
+      if (m.name === 'posture') (r.lastValues as Record<string, unknown>)['posture_raw'] = value
       r.tickCount++
       await dbc.insert(events).values({
         patientId,
@@ -115,21 +124,26 @@ function startPatientRunner(
         tags: { sim: true, simId: sim.id, profile: sim.profileName },
       })
 
-      const result = evaluatePatientState(patientId, r.lastValues)
-      if (result.overallState !== r.lastState && r.lastState !== null) {
-        dbc.insert(events).values({
-          patientId,
-          kind: 'state_transition',
-          metric: r.lastState,
-          value: result.overallState,
-          source: 'simulator',
-          recordedAt: new Date(),
-          tags: { sim: true, from: r.lastState, to: result.overallState },
-        }).catch((err: Error) => {
-          logger.warn({ err }, '状态转换写入失败')
-        })
+      // LSTM 可选
+      if (buildWindowRow && pushPredictionRow && tryPredict) {
+        const wr = buildWindowRow(r.lastValues); pushPredictionRow(patientId, wr)
+        const p = await tryPredict(patientId); const st = p ?? evaluatePatientState(patientId, r.lastValues).overallState
+        if (st !== r.lastState && r.lastState !== null) {
+          dbc.insert(events).values({ patientId, kind: 'state_transition', metric: r.lastState, value: st, source: 'simulator', recordedAt: new Date(), tags: { sim: true, from: r.lastState, to: st, method: p ? 'lstm' : 'threshold' } }).catch((err: Error) => { logger.warn({ err }, '状态转换写入失败') })
+        }
+        r.lastState = st
+      } else {
+        const st = evaluatePatientState(patientId, r.lastValues).overallState
+        if (st !== r.lastState && r.lastState !== null) {
+          dbc.insert(events).values({ patientId, kind: 'state_transition', metric: r.lastState, value: st, source: 'simulator', recordedAt: new Date(), tags: { sim: true, from: r.lastState, to: st, method: 'threshold' } }).catch((err: Error) => { logger.warn({ err }, '状态转换写入失败') })
+        }
+        r.lastState = st
       }
-      r.lastState = result.overallState
+
+      // 多模态融合：每5个tick计算一次
+      if (r.tickCount % 5 === 0) {
+        computeFusionScoreAsync(dbc, patientId, r.lastValues, sim.profileName, r.lastState)
+      }
     })
   }
 }
@@ -149,10 +163,123 @@ function stopPatientRunner(patientId: string) {
 
 export { simulations, patientSimMap, startPatientRunner, stopPatientRunner }
 
+export async function recoverSimulations(db: DbClient) {
+  try {
+    const mod = await import('./predictor.js')
+    initPredictor = mod.initPredictor
+    tryPredict = mod.tryPredict
+    pushPredictionRow = mod.pushPredictionRow
+    buildWindowRow = mod.buildWindowRow
+  } catch (err) { logger.warn({ err }, 'LSTM 预测模块加载失败（ONNX 不兼容），跳过') }
+
+  try {
+    const mod = await import('./chat/behavior-predictor.js')
+    initBehaviorPredictor = mod.initBehaviorPredictor
+  } catch (err) { logger.warn({ err }, '行为识别模块加载失败（ONNX 不兼容），跳过') }
+
+  if (initPredictor) await initPredictor()
+  if (initBehaviorPredictor) await initBehaviorPredictor()
+
+  const rows = await db.select().from(simConfigs).where(eq(simConfigs.running, true))
+
+  if (rows.length === 0) {
+    logger.info('无待恢复的仿真')
+    return
+  }
+
+  let recovered = 0
+  let patientsTotal = 0
+
+  for (const row of rows) {
+    const profile = profiles[row.profileName]
+    if (!profile) {
+      logger.warn({ simId: row.id, profileName: row.profileName }, '恢复跳过: 未知配置档案')
+      continue
+    }
+
+    const savedMetrics = (row.metrics as any[]) || []
+    const hydratedMetrics = savedMetrics.length > 0
+      ? savedMetrics.map((m: any) => ({
+          name: m.name,
+          config: { metric: m.name, ...m.config, unit: m.config?.unit ?? '', interval: m.config?.interval ?? { min: 3000, max: 5000 }, jitter: m.config?.jitter ?? 0.2, generator: m.config?.generator ?? '' },
+          enabled: m.enabled ?? true,
+        }))
+      : profile.metrics.map((m) => ({
+          name: m.metric,
+          config: { ...m },
+          enabled: true,
+        }))
+
+    const sim: Simulation = {
+      id: row.id,
+      name: row.name,
+      profileName: row.profileName,
+      profile,
+      metrics: hydratedMetrics,
+      patients: new Map(),
+      running: false,
+      speed: row.speed ?? 1,
+    }
+    simulations.set(row.id, sim)
+
+    const patientRows = await db
+      .select({ patientId: simPatients.patientId })
+      .from(simPatients)
+      .where(eq(simPatients.simId, row.id))
+
+    if (patientRows.length > 0) {
+      const pids = patientRows.map((p) => p.patientId)
+      const pRecords = await db
+        .select({ id: patients.id, name: patients.name })
+        .from(patients)
+        .where(inArray(patients.id, pids))
+
+      const nameMap = new Map(pRecords.map((p) => [p.id, p.name]))
+
+      for (const pid of pids) {
+        const pname = nameMap.get(pid) ?? pid
+        startPatientRunner(db, sim, pid, pname)
+      }
+      sim.running = true
+      patientsTotal += pids.length
+    }
+
+    recovered++
+    logger.info({ simId: row.id, simName: row.name, patients: patientRows.length }, '仿真已恢复')
+  }
+
+  logger.info(`数字孪生引擎恢复完成: ${recovered} 个仿真, ${patientsTotal} 位患者`)
+}
+
+async function computeFusionScoreAsync(dbc: DbClient, patientId: string, lastValues: Record<string, number>, profileName: string, overallState: string) {
+  try {
+    const mood = overallState === 'emergency' ? 'anxious' : overallState === 'alert' ? 'anxious' : 'calm'
+    const report = computeFusionScore({
+      patientId, patientName: patientId.slice(0, 8),
+      profileId: profileName,
+      vitals: lastValues,
+      behaviors24h: overallState === 'emergency' ? ['falling'] : [],
+      postureScore: null,
+      cognitiveScore: null,
+      moodStatus: mood,
+      recentAlerts: overallState === 'emergency' ? 3 : overallState === 'alert' ? 1 : 0,
+    })
+    await dbc.insert(events).values({
+      patientId,
+      kind: 'observation',
+      metric: 'fusion_score',
+      value: JSON.stringify(report),
+      source: 'simulator',
+      recordedAt: new Date(),
+      tags: { index: report.overallIndex, status: report.overallStatus },
+    })
+  } catch (err) { /* silent */ }
+}
+
 export function createSimulation(db: DbClient, config: { profileName: string; name?: string }) {
   const profile = profiles[config.profileName]
   if (!profile) return null
-  const id = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  const id = crypto.randomUUID()
   const metrics = profile.metrics.map((m) => ({
     name: m.metric,
     config: { ...m },

@@ -141,7 +141,7 @@ export function PatientDetailShell() {
             档案
           </Tabs.Tab>
           <Tabs.Tab value="alerts" leftSection={<IconAlertTriangle size={14} />}>
-            告警
+            警告
           </Tabs.Tab>
           <Tabs.Tab value="rules" leftSection={<IconSettings size={14} />}>
             阈值

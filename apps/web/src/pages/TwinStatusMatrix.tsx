@@ -73,7 +73,7 @@ const POSTURE_LABELS: Record<number, string> = {
 const STATE_LABELS: Record<OverallState, string> = {
   stable: '低风险',
   watch: '关注',
-  alert: '告警',
+  alert: '警告',
   emergency: '紧急',
 }
 

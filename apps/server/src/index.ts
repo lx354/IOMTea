@@ -4,7 +4,7 @@ import path from 'node:path'
 import { serve } from '@hono/node-server'
 import { apiReference } from '@scalar/hono-api-reference'
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
 import { logger as honoLogger } from 'hono/logger'
@@ -39,6 +39,7 @@ import { plansRouter } from './routes/plans'
 import { tagsRouter } from './routes/tags'
 import { twinRouter } from './routes/twin'
 import { usersRouter } from './routes/users'
+import { recoverSimulations } from './modules/twin'
 
 function resolveCorsOrigins(rawCorsOrigin: string | undefined): string[] {
   if (!rawCorsOrigin) return ['http://localhost:5173']
@@ -191,17 +192,40 @@ async function bootstrap() {
     process.exit(1)
   }
 
-  // ---- 2. 默认演示账号 ----
-  // 空系统自动创建 demo/demo123，避免首次登录无账号可用
+  // ---- 2. 角色枚举迁移 ----
+  try {
+    await db.execute(sql`ALTER TYPE role ADD VALUE IF NOT EXISTS 'family'`)
+    await db.execute(sql`ALTER TYPE role ADD VALUE IF NOT EXISTS 'nurse'`)
+    await db.execute(sql`ALTER TYPE role ADD VALUE IF NOT EXISTS 'doctor'`)
+  } catch { /* enum values likely already exist */ }
+
+  // ---- 3. 默认演示账号 ----
   const existingUsers = await db.select({ id: users.id }).from(users).limit(1)
   if (existingUsers.length === 0) {
     await db.insert(users).values({
-      username: 'demo',
-      passwordHash: await hashPassword('demo123'),
-      displayName: '演示用户',
-      role: 'admin',
+      username: 'demo', passwordHash: await hashPassword('demo123'),
+      displayName: '演示用户', role: 'admin',
     })
     logger.info('√ 演示账号已创建 (demo / demo123)')
+  }
+
+  // 种子多角色账号（每个角色检查是否已存在）
+  const seedRoles: Array<{ username: string; password: string; displayName: string; role: string }> = [
+    { username: 'family01', password: '123456', displayName: '家属张女士', role: 'family' },
+    { username: 'nurse01', password: '123456', displayName: '护理员小李', role: 'nurse' },
+    { username: 'doctor', password: '123456', displayName: '刘医生', role: 'doctor' },
+  ]
+  for (const seed of seedRoles) {
+    const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.username, seed.username)).limit(1)
+    if (!exists) {
+      await db.insert(users).values({
+        username: seed.username,
+        passwordHash: await hashPassword(seed.password),
+        displayName: seed.displayName,
+        role: seed.role as any,
+      })
+      logger.info(`√ ${seed.role} 账号已创建 (${seed.username} / ${seed.password})`)
+    }
   }
 
   // ---- 3. 超级管理员（可选） ----
@@ -219,12 +243,12 @@ async function bootstrap() {
   }
 
   // ---- 4. 初始数据 ----
-  // 空患者表时自动写入种子数据（3位虚拟患者 + 48小时体征事件 + 告警 + 用药方案）
+  // 空患者表时自动写入种子数据（3位虚拟患者 + 48小时体征事件 + 警告 + 用药方案）
   try {
     const patientCount = await db.select().from(patients)
     if (patientCount.length === 0) {
       await seedDemoData(db)
-      logger.info('√ 初始数据已就绪 (3 位居民、体征事件、告警、用药计划)')
+      logger.info('√ 初始数据已就绪 (3 位居民、体征事件、警告、用药计划)')
     }
   } catch (err) {
     logger.warn({ err }, '初始数据种子失败 (可忽略)')
@@ -238,8 +262,12 @@ async function bootstrap() {
     logger.warn({ err }, '权限种子失败 (请先执行 db:migrate)')
   }
 
-  // ---- 6. 数字孪生引擎 ----
-  // 由 REST API (/twin) 管理，启动时不做自动启停
+  // ---- 6. 数字孪生引擎恢复 ----
+  try {
+    await recoverSimulations(db)
+  } catch (err) {
+    logger.warn({ err }, '数字孪生引擎恢复失败 (可忽略)')
+  }
 }
 
 // bootstrap 完成后启动网络服务

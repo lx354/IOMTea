@@ -1,0 +1,22 @@
+.page { padding: 24px; min-height: 100vh; background: #f5f5f5; }
+.empty { display: block; text-align: center; color: #999; padding: 60px 0; font-size: 28px; }
+
+.alert-item { background: #fff; padding: 24px; margin-bottom: 12px; border-radius: 12px; border-left: 6px solid #999; }
+.alert-type { font-size: 30px; font-weight: 600; display: block; }
+.alert-severity { font-size: 24px; display: block; margin-top: 4px; }
+.alert-time { font-size: 22px; color: #999; display: block; margin-top: 4px; }
+.alert-status { font-size: 22px; color: #666; margin-top: 4px; display: block; }
+
+.device-item { background: #fff; padding: 24px; margin-bottom: 12px; border-radius: 12px; }
+.device-serial { font-size: 30px; font-weight: 600; }
+.device-meta { display: flex; gap: 16px; margin-top: 8px; }
+.device-type { font-size: 24px; color: #666; }
+.device-status { font-size: 24px; font-weight: 600; }
+
+.picker { background: #fff; padding: 24px; margin-bottom: 16px; border-radius: 12px; font-size: 28px; text-align: center; }
+.vital-item { background: #fff; padding: 24px; margin-bottom: 8px; border-radius: 12px; display: flex; justify-content: space-between; }
+.vital-metric { font-size: 28px; }
+.vital-value { font-size: 28px; font-weight: 700; }
+
+.form-group { background: #fff; padding: 24px; border-radius: 12px; margin-bottom: 16px; }
+.label { font-size: 26px; color: #666; display: block; margin-bottom: 8px; }
