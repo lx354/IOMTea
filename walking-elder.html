@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老人走路动画</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #e8f5e9;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; overflow: hidden; font-family: sans-serif;
+  }
+  .scene {
+    position: relative; width: 800px; height: 400px;
+    background: linear-gradient(to bottom, #87ceeb 0%, #b0e0ff 40%, #90c695 40%, #4a8f3f 100%);
+    border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.15);
+  }
+  .sun {
+    position: absolute; top: 30px; right: 80px;
+    width: 60px; height: 60px; background: #fdd835; border-radius: 50%;
+    box-shadow: 0 0 40px #fdd83580;
+  }
+  .cloud {
+    position: absolute; top: 50px; background: white; border-radius: 50%;
+    animation: drift 30s linear infinite;
+  }
+  .cloud::before, .cloud::after {
+    content: ''; position: absolute; background: white; border-radius: 50%;
+  }
+  .cloud:nth-child(2) { width: 70px; height: 30px; left: 500px; top: 40px; }
+  .cloud:nth-child(2)::before { width: 35px; height: 35px; top: -18px; left: 10px; }
+  .cloud:nth-child(2)::after { width: 45px; height: 40px; top: -22px; left: 28px; }
+  .cloud:nth-child(3) { width: 60px; height: 25px; left: 200px; top: 25px; }
+  .cloud:nth-child(3)::before { width: 30px; height: 30px; top: -15px; left: 8px; }
+  .cloud:nth-child(3)::after { width: 38px; height: 35px; top: -18px; left: 22px; }
+  @keyframes drift {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100vw); }
+  }
+
+  .ground {
+    position: absolute; bottom: 0; width: 100%; height: 160px;
+    background: linear-gradient(to bottom, #6ab04c, #4a8f3f);
+  }
+  .path {
+    position: absolute; bottom: 0; left: 0; width: 200%; height: 8px;
+    background: repeating-linear-gradient(90deg, #d3a56b 0px, #d3a56b 20px, transparent 20px, transparent 40px);
+    animation: scroll 3s linear infinite;
+  }
+  .grass {
+    position: absolute; bottom: 148px; left: 0; width: 100%; height: 15px;
+    background: repeating-linear-gradient(
+      90deg, transparent 0px, #5a9e3f 3px, transparent 3px, transparent 8px,
+      transparent 8px, #4d8c34 11px, transparent 11px, transparent 16px
+    );
+  }
+  .tree {
+    position: absolute; bottom: 148px; z-index: 2;
+  }
+  .tree .trunk {
+    width: 12px; height: 50px; background: #6d4c41; margin: 0 auto; border-radius: 3px;
+  }
+  .tree .leaves {
+    width: 50px; height: 50px; background: #388e3c; border-radius: 50%;
+    position: relative; top: 4px; left: -19px;
+  }
+  .tree:nth-child(7) { left: 80px; }
+  .tree:nth-child(8) { left: 650px; bottom: 148px; }
+  .tree:nth-child(9) { left: 580px; bottom: 148px; }
+  .tree:nth-child(9) .leaves { width: 40px; height: 40px; left: -14px; }
+  .tree:nth-child(9) .trunk { height: 35px; }
+
+  .walker-group {
+    position: absolute; bottom: 152px; left: 100px;
+    animation: bob 0.8s ease-in-out infinite alternate;
+  }
+  @keyframes bob {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-4px); }
+  }
+
+  /* 人物 SVG */
+  .elder {
+    width: 80px; height: 140px;
+  }
+
+  /* 左腿走路 */
+  .leg-left  { animation: walkLeft  0.8s ease-in-out infinite; transform-origin: 42px 87px; }
+  .leg-right { animation: walkRight 0.8s ease-in-out infinite 0.4s; transform-origin: 38px 87px; }
+  .arm-left  { animation: armLeft   0.8s ease-in-out infinite; transform-origin: 30px 55px; }
+  .arm-right { animation: armRight  0.8s ease-in-out infinite 0.4s; transform-origin: 50px 55px; }
+  .cane      { animation: caneSwing 0.8s ease-in-out infinite 0.4s; transform-origin: 55px 55px; }
+
+  @keyframes walkLeft {
+    0%, 100% { transform: rotate(-18deg); }
+    50% { transform: rotate(18deg); }
+  }
+  @keyframes walkRight {
+    0%, 100% { transform: rotate(18deg); }
+    50% { transform: rotate(-18deg); }
+  }
+  @keyframes armLeft {
+    0%, 100% { transform: rotate(14deg); }
+    50% { transform: rotate(-14deg); }
+  }
+  @keyframes armRight {
+    0%, 100% { transform: rotate(-10deg); }
+    50% { transform: rotate(10deg); }
+  }
+  @keyframes caneSwing {
+    0%, 100% { transform: rotate(-6deg); }
+    50% { transform: rotate(6deg); }
+  }
+  @keyframes scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .label {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.5); color: white; padding: 4px 16px; border-radius: 12px;
+    font-size: 13px; letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="sun"></div>
+  <div class="cloud"></div>
+  <div class="cloud"></div>
+  <div class="tree"><div class="leaves"></div><div class="trunk"></div></div>
+  <div class="tree"><div class="leaves"></div><div class="trunk"></div></div>
+  <div class="tree"><div class="leaves"></div><div class="trunk"></div></div>
+  <div class="grass"></div>
+  <div class="ground"></div>
+  <div class="path"></div>
+
+  <!-- 老人 + 拐杖 -->
+  <div class="walker-group">
+    <svg class="elder" viewBox="0 0 80 140" xmlns="http://www.w3.org/2000/svg">
+      <!-- 拐杖 -->
+      <g class="cane">
+        <line x1="56" y1="40" x2="64" y2="115" stroke="#795548" stroke-width="3.5" stroke-linecap="round"/>
+        <ellipse cx="62" cy="38" rx="8" ry="3" fill="#6d4c41" transform="rotate(15,62,38)"/>
+      </g>
+
+      <!-- 左臂 -->
+      <g class="arm-left">
+        <line x1="30" y1="55" x2="22" y2="78" stroke="#f5c6a0" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="22" cy="79" r="3.5" fill="#f5c6a0"/>
+      </g>
+
+      <!-- 右臂 (扶着拐杖) -->
+      <g class="arm-right">
+        <line x1="50" y1="55" x2="57" y2="52" stroke="#f5c6a0" stroke-width="5" stroke-linecap="round"/>
+      </g>
+
+      <!-- 身体 -->
+      <ellipse cx="40" cy="65" rx="14" ry="16" fill="#5c6bc0"/>
+
+      <!-- 头部 -->
+      <circle cx="40" cy="32" r="14" fill="#f5c6a0"/>
+
+      <!-- 白发 -->
+      <path d="M26,30 Q28,14 40,14 Q52,14 54,30" fill="#e0e0e0" stroke="#ccc" stroke-width="1"/>
+
+      <!-- 眼镜 -->
+      <circle cx="34" cy="32" r="5" fill="none" stroke="#333" stroke-width="1.5"/>
+      <circle cx="47" cy="32" r="5" fill="none" stroke="#333" stroke-width="1.5"/>
+      <line x1="39" y1="32" x2="42" y2="32" stroke="#333" stroke-width="1.5"/>
+
+      <!-- 眼睛 -->
+      <circle cx="35" cy="32" r="1.5" fill="#333"/>
+      <circle cx="48" cy="32" r="1.5" fill="#333"/>
+
+      <!-- 嘴 (微笑) -->
+      <path d="M36,40 Q40,43 44,40" fill="none" stroke="#333" stroke-width="1" stroke-linecap="round"/>
+
+      <!-- 左腿 -->
+      <g class="leg-left">
+        <line x1="35" y1="80" x2="30" y2="110" stroke="#455a64" stroke-width="6" stroke-linecap="round"/>
+        <ellipse cx="28" cy="112" rx="9" ry="4" fill="#37474f"/>
+      </g>
+
+      <!-- 右腿 -->
+      <g class="leg-right">
+        <line x1="45" y1="80" x2="50" y2="110" stroke="#455a64" stroke-width="6" stroke-linecap="round"/>
+        <ellipse cx="52" cy="112" rx="9" ry="4" fill="#37474f"/>
+      </g>
+
+      <!-- 衣领 -->
+      <path d="M33,52 L40,58 L47,52" fill="none" stroke="#4a55a8" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <div class="label">认知障碍老人 · 日常行走监测</div>
+</div>
+</body>
+</html>

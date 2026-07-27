@@ -9,6 +9,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { useGet, usePatch, usePost } from '../api/hooks'
 import { StateSkeleton } from '../components/StateComponents'
+import { tr } from '../lib/metrics'
 
 interface Alert {
   id: string; patientId: string; metric: string
@@ -157,7 +158,7 @@ export function AlertBoard() {
                           }>{sc.zh}</Badge>
                           <Text fw={600} size="sm">{patientName}</Text>
                           <Text size="xs" c="dimmed">
-                            {a.metric}: {String(a.value ?? '—')}{a.unit ? ` ${a.unit}` : ''}
+                            {tr(a.metric)}: {String(a.value ?? '—')}{a.unit ? ` ${a.unit}` : ''}
                           </Text>
                         </Group>
                         <Group gap="xs">

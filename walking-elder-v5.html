@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老人行走</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#fff}
+  canvas{display:block}
+  .tip{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);color:#bbb;font:12px 'PingFang SC','Microsoft YaHei',sans-serif;letter-spacing:1px;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="tip">← → 步速 &nbsp; R 重置</div>
+<script>
+(()=>{
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;
+function R(){W=C.width=innerWidth;H=C.height=innerHeight}
+R();addEventListener('resize',R);
+
+/* ============ 比例与缩放 ============ */
+const K=Math.min(W,H)/640;
+const S=v=>v*K;
+const GY=H*.73;                     // 地面 Y
+
+// 身体尺寸 (按 170cm 老年男性比例)
+const HD_H=S(64),HD_W=S(46);       // 头
+const NK_H=S(24),NK_W=S(28);       // 颈
+const TO_H=S(155);                 // 躯干高
+const TH_H=S(110),SH_H=S(98);      // 大腿 / 小腿
+const FT_L=S(40),FT_H=S(14);       // 脚
+const UA_H=S(74),LA_H=S(68);       // 上臂 / 前臂
+const HD_R=S(15);                  // 手掌半径
+const SW=S(86),HW=S(64);           // 肩宽 / 髋宽
+const ROOT_X=W*.5;                 // 根骨骼 X
+
+/* ============ 步态参数 ============ */
+const CY_MS=2100;
+const HIP_A=13.5*Math.PI/180;
+const KN_SW=29*Math.PI/180;
+const KN_ST=2.0*Math.PI/180;
+const SH_A=8.5*Math.PI/180;
+const EL_SW=7.5*Math.PI/180;
+const TO_LEAN=5.5*Math.PI/180;
+const TO_SWAY=2.5*Math.PI/180;
+const TO_TWST=3.0*Math.PI/180;
+const PV_TILT=2.5*Math.PI/180;
+const B_LIFT=S(5);
+const B_SHFT=S(2.2);
+const HD_STAB=.4;
+
+let spd=1;
+
+/* ============ 调色板 ============ */
+const SK={lt:'#f4d4b8',md:'#eac8a6',dk:'#d8b090',sd:'#c8a080'};
+const HR={lt:'#e8e8e8',md:'#d0d0d0',dk:'#b0b0b0'};
+const SH={lt:'#faf8f4',md:'#f0ece6',dk:'#dcd6ce',sd:'#c8c2ba'};
+const PA={lt:'#52565c',md:'#42464c',dk:'#32363c',sd:'#22262c'};
+const SO={up:'#222',lo:'#2e2e2e'};
+
+/* ============ 辅助 ============ */
+function knA(p){const s=Math.sin(p);return Math.max(0,-s)*KN_SW+Math.max(0,s)*KN_ST}
+function elA(p){return Math.max(0,Math.sin(p))*EL_SW}
+
+/* ---- 画有机肢体 ---- */
+function limb(c,x1,y1,x2,y2,r1,r2,rm,cL,cM,cD,alpha){
+  c.save();if(alpha!=null)c.globalAlpha=alpha;
+  const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy)||1;
+  const nx=-dy/L,ny=dx/L;
+  const mx=(x1+x2)/2,my=(y1+y2)/2;
+  // 前缘控制点
+  const f0x=x1+nx*r1,f0y=y1+ny*r1;
+  const f1x=mx+nx*rm,f1y=my+ny*rm;
+  const f2x=x2+nx*r2,f2y=y2+ny*r2;
+  // 后缘控制点
+  const b2x=x2-nx*r2,b2y=y2-ny*r2;
+  const b1x=mx-nx*rm,b1y=my-ny*rm;
+  const b0x=x1-nx*r1,b0y=y1-ny*r1;
+  // 贝塞尔曲线: 前缘微微外凸, 后缘有轻微起伏(肌肉感)
+  const cp1x=f0x+dx*.08,cp1y=f0y+dy*.08;
+  const cp2x=f1x+dx*.04,cp2y=f1y+dy*.04;
+  const cp3x=f2x-dx*.06,cp3y=f2y-dy*.06;
+  const cp4x=b2x-dx*.06,cp4y=b2y-dy*.06;
+  const cp5x=b1x-dx*.04,cp5y=b1y-dy*.04;
+  const cp6x=b0x+dx*.08,cp6y=b0y+dy*.08;
+
+  c.beginPath();
+  c.moveTo(f0x,f0y);
+  c.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,f1x,f1y);
+  c.bezierCurveTo(f1x+dx*.03,f1y+dy*.03,cp3x,cp3y,f2x,f2y);
+  c.lineTo(b2x,b2y);
+  c.bezierCurveTo(cp4x,cp4y,b1x-dx*.03,b1y-dy*.03,b1x,b1y);
+  c.bezierCurveTo(cp5x,cp5y,cp6x,cp6y,b0x,b0y);
+  c.closePath();
+
+  const g=c.createLinearGradient(x1-nx*rm,y1-ny*rm,x1+nx*rm,y1+ny*rm);
+  g.addColorStop(0,cD);g.addColorStop(.35,cM);g.addColorStop(.7,cL);g.addColorStop(1,cM);
+  c.fillStyle=g;c.fill();
+  c.strokeStyle='rgba(0,0,0,.07)';c.lineWidth=S(.8);c.stroke();
+  c.restore();
+}
+
+/* ---- 躯干 ---- */
+function torso(c,sx,sy,hx,hy,sw,hw,lean){
+  const dx=hx-sx,dy=hy-sy,L=Math.hypot(dx,dy)||1;
+  const nx=-dy/L,ny=dx/L;
+  // 驼背隆起
+  const hunchX=sx+dx*.2-nx*S(20),hunchY=sy+dy*.2-ny*S(20);
+  // 腰部收窄
+  const wstX=(sx+hx)/2,wstY=(sy+hy)/2;
+  // 腹部微凸
+  const bellyX=hx-dx*.15+nx*S(10),bellyY=hy-dy*.15+ny*S(10);
+  // 肩点
+  const sl=sx-nx*sw*.5,sly=sy-ny*sw*.5;
+  const sr=sx+nx*sw*.5,sry=sy+ny*sw*.5;
+  // 髋点
+  const hl=hx-nx*hw*.5,hly=hy-ny*hw*.5;
+  const hr=hx+nx*hw*.5,hry=hy+ny*hw*.5;
+
+  c.beginPath();
+  // 前轮廓: 右肩→右胸→右腹→右髋
+  c.moveTo(sr,sry);
+  c.bezierCurveTo(sr+dx*.15,sry+dy*.15,wstX+nx*S(8)+dx*.1,wstY+ny*S(8)+dy*.1,wstX+nx*S(4),wstY+ny*S(4));
+  c.bezierCurveTo(bellyX,bellyY,hr-dx*.05,hr-dy*.05,hr,hry);
+  // 底边
+  c.lineTo(hl,hly);
+  // 后轮廓: 左髋→左腰→驼背→左肩
+  c.bezierCurveTo(hl-dx*.05,hl-dy*.05,wstX-nx*S(6)-dx*.05,wstY-ny*S(6)-dy*.05,wstX-nx*S(3),wstY-ny*S(3));
+  c.bezierCurveTo(hunchX,hunchY,sl+dx*.1,sl+dy*.1,sl,sly);
+  c.closePath();
+
+  const g=c.createLinearGradient(sx-nx*S(40),sy-ny*S(40),sx+nx*S(40),sy+ny*S(40));
+  g.addColorStop(0,SH.sd);g.addColorStop(.25,SH.dk);g.addColorStop(.55,SH.md);g.addColorStop(.8,SH.lt);g.addColorStop(1,SH.dk);
+  c.fillStyle=g;c.fill();
+  c.strokeStyle='rgba(0,0,0,.08)';c.lineWidth=S(1);c.stroke();
+
+  // 领口
+  c.beginPath();
+  c.ellipse(sx-nx*S(2),sy-ny*S(2),S(18),S(8),Math.atan2(-ny,-nx)-.15,0,Math.PI*2);
+  c.strokeStyle='rgba(0,0,0,.12)';c.lineWidth=S(1.5);c.stroke();
+  // 衣扣虚线
+  c.beginPath();c.moveTo(sx-nx*S(3),sy-ny*S(3));c.lineTo(hx-nx*S(5),hy-ny*S(5));
+  c.strokeStyle='rgba(0,0,0,.05)';c.lineWidth=S(.6);c.setLineDash([S(5),S(7)]);c.stroke();c.setLineDash([]);
+}
+
+/* ---- 头部 + 颈 ---- */
+function headNeck(c,hx,hy,nx,ny,hs){
+  // 脖子 — 从躯干肩部向上渐变到头部底部
+  const nh=NK_H,nw=NK_W*.5;
+  c.save();
+  c.beginPath();
+  c.moveTo(nx-nw,ny);
+  c.bezierCurveTo(nx-nw*1.1,ny+nh*.3,hx-S(13),hy+nh*.4,hx-S(11),hy-S(2));
+  c.lineTo(hx+S(11),hy-S(2));
+  c.bezierCurveTo(hx+S(13),hy+nh*.4,nx+nw*1.1,ny+nh*.3,nx+nw,ny);
+  c.closePath();
+  const ng=c.createLinearGradient(nx-nw,ny,nx+nw,ny);
+  ng.addColorStop(0,SK.sd);ng.addColorStop(.3,SK.dk);ng.addColorStop(.6,SK.md);ng.addColorStop(1,SK.sd);
+  c.fillStyle=ng;c.fill();
+  c.strokeStyle='rgba(0,0,0,.05)';c.lineWidth=S(.7);c.stroke();
+  // 喉结 (老年不明显, 轻微阴影)
+  c.beginPath();
+  c.ellipse(nx+S(2),ny+nh*.4,S(4),S(7),.1,0,Math.PI*2);
+  c.fillStyle='rgba(0,0,0,.03)';c.fill();
+  c.restore();
+
+  // 头部椭圆
+  c.save();c.translate(hx,hy);
+  c.beginPath();c.ellipse(0,0,HD_W*.5,HD_H*.5,0,0,Math.PI*2);
+  const hg=c.createRadialGradient(S(-8),S(-10),HD_W*.1,0,0,HD_W*.6);
+  hg.addColorStop(0,SK.lt);hg.addColorStop(.5,SK.md);hg.addColorStop(.85,SK.dk);hg.addColorStop(1,SK.sd);
+  c.fillStyle=hg;c.fill();
+  c.strokeStyle='rgba(0,0,0,.06)';c.lineWidth=S(.8);c.stroke();
+
+  // 白发 — 顶部 + 两侧
+  c.beginPath();
+  c.ellipse(S(2),-S(10),HD_W*.52,HD_H*.38,-.05,Math.PI*1.05,Math.PI*1.95);
+  const hrg=c.createLinearGradient(-HD_W*.4,-HD_H*.4,HD_W*.4,-HD_H*.2);
+  hrg.addColorStop(0,HR.dk);hrg.addColorStop(.5,HR.lt);hrg.addColorStop(1,HR.dk);
+  c.fillStyle=hrg;c.fill();
+  // 鬓发
+  c.beginPath();c.ellipse(-HD_W*.46,S(3),S(13),S(22),.25,-.5,1.2);c.fillStyle=HR.dk;c.fill();
+  c.beginPath();c.ellipse(HD_W*.46,S(3),S(13),S(22),-.25,Math.PI-1.2,Math.PI+.5);c.fill();
+  // 耳朵
+  c.beginPath();c.ellipse(-HD_W*.48,S(5),S(8),S(13),-.2,0,Math.PI*2);
+  const eg=c.createRadialGradient(-HD_W*.48,S(3),S(2),-HD_W*.48,S(5),S(13));
+  eg.addColorStop(0,SK.md);eg.addColorStop(1,SK.sd);c.fillStyle=eg;c.fill();
+
+  // 眉毛 (花白、略八字)
+  c.beginPath();c.moveTo(-S(18),-S(12));c.quadraticCurveTo(-S(5),-S(18),S(4),-S(16));
+  c.strokeStyle='#b8b8b8';c.lineWidth=S(2.4);c.lineCap='round';c.stroke();
+  c.beginPath();c.moveTo(-S(4),-S(16));c.quadraticCurveTo(S(6),-S(18),S(20),-S(12));c.stroke();
+
+  // 眼睛
+  [ -S(10), S(12) ].forEach((ex,i)=>{
+    // 眼白
+    c.beginPath();c.ellipse(ex,-S(5),S(5.5),S(5),.02,0,Math.PI*2);
+    c.fillStyle='#fdfdfd';c.fill();c.strokeStyle='rgba(0,0,0,.2)';c.lineWidth=S(.8);c.stroke();
+    // 虹膜 (深棕)
+    c.beginPath();c.arc(ex+S(1),-S(5),S(3.2),0,Math.PI*2);
+    c.fillStyle='#3a3028';c.fill();
+    // 瞳孔
+    c.beginPath();c.arc(ex+S(1.5),-S(5),S(1.6),0,Math.PI*2);
+    c.fillStyle='#0a0a0a';c.fill();
+    // 高光
+    c.beginPath();c.arc(ex+S(.3),-S(7),S(.9),0,Math.PI*2);c.fillStyle='#fff';c.fill();
+    // 上眼睑褶皱 (老年特征)
+    c.beginPath();c.ellipse(ex+S(1),-S(6),S(6),S(5.5),.02,Math.PI*1.05,Math.PI*1.95);
+    c.strokeStyle='rgba(0,0,0,.1)';c.lineWidth=S(1);c.stroke();
+    // 眼袋
+    c.beginPath();c.ellipse(ex+S(1),S(1),S(6.5),S(3.5),0,0,Math.PI);
+    c.strokeStyle='rgba(0,0,0,.05)';c.lineWidth=S(1.2);c.stroke();
+  });
+
+  // 鼻子 (亚洲人扁鼻)
+  c.beginPath();
+  c.moveTo(S(0),-S(8));c.quadraticCurveTo(S(2),S(5),-S(1),S(6));
+  c.quadraticCurveTo(S(5),S(7),S(4),S(2));
+  c.strokeStyle='rgba(0,0,0,.16)';c.lineWidth=S(1.3);c.stroke();
+  c.beginPath();c.ellipse(S(2),S(5),S(6),S(4.5),-.08,0,Math.PI*2);
+  c.fillStyle=SK.md;c.fill();
+
+  // 法令纹
+  c.beginPath();c.moveTo(-S(4),S(8));c.quadraticCurveTo(-S(7),S(15),-S(8),S(22));
+  c.strokeStyle='rgba(0,0,0,.04)';c.lineWidth=S(1);c.stroke();
+  c.beginPath();c.moveTo(S(6),S(8));c.quadraticCurveTo(S(9),S(15),S(10),S(22));c.stroke();
+
+  // 嘴 (微笑)
+  c.beginPath();c.moveTo(-S(8),S(18));c.quadraticCurveTo(S(1),S(24),S(10),S(18));
+  c.strokeStyle='#b87060';c.lineWidth=S(1.6);c.lineCap='round';c.stroke();
+
+  // 老花镜
+  c.beginPath();c.ellipse(-S(10),-S(5),S(11),S(10),.05,0,Math.PI*2);
+  c.strokeStyle='#4a4a4a';c.lineWidth=S(1.6);c.stroke();
+  c.beginPath();c.ellipse(S(12),-S(5),S(11),S(10),-.04,0,Math.PI*2);c.stroke();
+  c.beginPath();c.moveTo(-S(2),-S(8));c.quadraticCurveTo(S(2),-S(13),S(3),-S(8));c.stroke();
+  c.beginPath();c.moveTo(-S(20),-S(4));c.lineTo(-S(28),S(4));c.stroke();
+  c.restore();
+}
+
+/* ---- 脚 ---- */
+function foot(c,ax,ay,a){
+  c.save();c.translate(ax,ay);c.rotate(a);
+  // 鞋体
+  c.beginPath();
+  c.moveTo(S(6),-S(8));
+  c.bezierCurveTo(S(36),-S(14),S(40),S(2),S(32),S(8));
+  c.lineTo(-S(6),S(8));
+  c.bezierCurveTo(-S(8),S(1),-S(5),-S(5),S(6),-S(8));
+  c.closePath();
+  const sg=c.createLinearGradient(0,-S(8),0,S(8));
+  sg.addColorStop(0,SO.up);sg.addColorStop(.5,'#383838');sg.addColorStop(1,SO.up);
+  c.fillStyle=sg;c.fill();
+  c.strokeStyle='rgba(0,0,0,.2)';c.lineWidth=S(.8);c.stroke();
+  // 鞋底
+  c.beginPath();
+  c.moveTo(-S(4),S(8));c.bezierCurveTo(S(12),S(12),S(28),S(12),S(32),S(8));
+  c.lineTo(S(32),S(13));c.bezierCurveTo(S(28),S(17),S(12),S(17),-S(4),S(13));
+  c.closePath();c.fillStyle=SO.lo;c.fill();
+  c.restore();
+}
+
+/* ---- 关节过渡球 ---- */
+function joint(c,x,y,r,col,alpha){
+  c.save();if(alpha!=null)c.globalAlpha=alpha;
+  c.beginPath();c.arc(x,y,r,0,Math.PI*2);
+  const g=c.createRadialGradient(x-r*.25,y-r*.25,r*.15,x,y,r);
+  g.addColorStop(0,col);g.addColorStop(1,'rgba(0,0,0,.08)');
+  c.fillStyle=g;c.fill();
+  c.restore();
+}
+
+/* ---- 手掌 ---- */
+function hand(c,x,y){
+  c.beginPath();c.arc(x,y,HD_R,0,Math.PI*2);
+  const g=c.createRadialGradient(x-S(3),y-S(3),S(2),x,y,HD_R);
+  g.addColorStop(0,SK.lt);g.addColorStop(1,SK.md);
+  c.fillStyle=g;c.fill();
+  c.strokeStyle='rgba(0,0,0,.08)';c.lineWidth=S(.6);c.stroke();
+}
+
+/* ============ 主绘制 ============ */
+function draw(p){
+  X.clearRect(0,0,W,H);
+  const s=Math.sin(p),cs=Math.cos(p),ca=Math.abs(cs);
+
+  // 关节角度
+  const hR=HIP_A*s,           hL=HIP_A*Math.sin(p+Math.PI);
+  const kR=knA(p),            kL=knA(p+Math.PI);
+  const sR=SH_A*Math.sin(p+Math.PI), sL=SH_A*s;
+  const eR=elA(p+Math.PI),    eL=elA(p);
+  const lean=TO_LEAN+1.*Math.PI/180*ca;
+  const sway=TO_SWAY*cs;
+  const twst=TO_TWST*s;
+  const pTilt=PV_TILT*ca;
+  const lift=B_LIFT*Math.abs(s);
+  const shft=B_SHFT*s;
+
+  // 根骨骼
+  const rx=ROOT_X+shft;
+  const ry=GY-TH_H-SH_H-S(8)-lift;
+
+  // 肩 (从髋沿躯干向量)
+  const sx=rx+Math.sin(lean)*TO_H;
+  const sry=ry-Math.cos(lean)*TO_H;
+
+  // 骨盆倾斜影响髋位
+  const hAdjX=Math.sin(pTilt)*S(6);
+  const hAdjY=(1-Math.cos(pTilt))*S(6);
+
+  // 左髋 (远侧)
+  const lhx=rx-Math.cos(lean)*S(11)-hAdjX,lhy=ry+Math.sin(lean)*S(11)+hAdjY;
+  // 右髋 (近侧)
+  const rhx=rx+Math.cos(lean)*S(11)+hAdjX,rhy=ry-Math.sin(lean)*S(11)-hAdjY;
+
+  // 左膝 / 左踝
+  const lkx=lhx+Math.sin(hL)*TH_H,          lky=lhy+Math.cos(hL)*TH_H;
+  const lax=lkx+Math.sin(hL-kL)*SH_H,       lay=lky+Math.cos(hL-kL)*SH_H;
+  // 右膝 / 右踝
+  const rkx=rhx+Math.sin(hR)*TH_H,          rky=rhy+Math.cos(hR)*TH_H;
+  const rax=rkx+Math.sin(hR-kR)*SH_H,       ray=rky+Math.cos(hR-kR)*SH_H;
+
+  // 肩位
+  const lshx=sx-Math.cos(lean)*S(13),       lshy=sry+Math.sin(lean)*S(13);
+  const rshx=sx+Math.cos(lean)*S(13),       rshy=sry-Math.sin(lean)*S(13);
+
+  // 左肘 / 左手
+  const lex=lshx+Math.sin(sL)*UA_H,         ley=lshy+Math.cos(sL)*UA_H;
+  const lhx2=lex+Math.sin(sL-eL)*LA_H,      lhy2=ley+Math.cos(sL-eL)*LA_H;
+  // 右肘 / 右手
+  const rex=rshx+Math.sin(sR)*UA_H,         rey=rshy+Math.cos(sR)*UA_H;
+  const rhx2=rex+Math.sin(sR-eR)*LA_H,      rhy2=rey+Math.cos(sR-eR)*LA_H;
+
+  // 脖子基部
+  const nx=sx+Math.sin(lean)*S(20),         ny=sry-Math.cos(lean)*S(20);
+  // 头中心
+  const hx=nx+Math.sin(lean)*S(8),          hy=ny-NK_H-HD_H*.32;
+
+  /* ---- 阴影 ---- */
+  X.beginPath();
+  X.ellipse(rx,GY+S(2),S(30)*(.75+.25*ca),S(7)*(.75+.25*ca),0,0,Math.PI*2);
+  X.fillStyle='rgba(0,0,0,.07)';X.fill();
+
+  /* ======== 远侧 (左) ======== */
+  const A_FAR=.66;
+  // 左臂
+  limb(X,lshx,lshy,lex,ley,S(11),S(9),S(12),SK.lt,SK.md,SK.dk,A_FAR);
+  limb(X,lex,ley,lhx2,lhy2,S(8),S(7),S(9),SK.lt,SK.md,SK.dk,A_FAR);
+  joint(X,lshx,lshy,S(10),SK.md,A_FAR);
+  joint(X,lex,ley,S(7),SK.md,A_FAR);
+  hand(X,lhx2,lhy2);
+  X.save();X.globalAlpha=A_FAR;hand(X,lhx2,lhy2);X.restore();
+
+  // 左腿
+  limb(X,lhx,lhy,lkx,lky,S(20),S(16),S(22),PA.lt,PA.md,PA.dk,A_FAR);
+  limb(X,lkx,lky,lax,lay,S(15),S(12),S(16),PA.lt,PA.md,PA.dk,A_FAR);
+  joint(X,lhx,lhy,S(14),PA.md,A_FAR);
+  joint(X,lkx,lky,S(11),PA.dk,A_FAR);
+  X.save();X.globalAlpha=A_FAR;foot(X,lax,lay,hL-kL+.08);X.restore();
+
+  /* ======== 躯干 ======== */
+  // 躯干扭转
+  const twX=Math.sin(twst)*S(5);
+  torso(X,sx+twX,sry,rx-twX,ry,SW,HW,lean);
+
+  // 髋关节球
+  joint(X,rx,ry,S(19),SH.md);
+  // 肩关节球
+  joint(X,sx,sry,S(17),SH.md);
+
+  /* ======== 头部 + 脖子 ======== */
+  headNeck(X,hx,hy,nx,ny,1.12);
+
+  /* ======== 近侧 (右) ======== */
+  // 右臂
+  limb(X,rshx,rshy,rex,rey,S(12),S(10),S(13),SK.lt,SK.md,SK.dk);
+  limb(X,rex,rey,rhx2,rhy2,S(9),S(8),S(10),SK.lt,SK.md,SK.dk);
+  joint(X,rshx,rshy,S(11),SK.md);
+  joint(X,rex,rey,S(8),SK.md);
+  hand(X,rhx2,rhy2);
+
+  // 右腿
+  limb(X,rhx,rhy,rkx,rky,S(21),S(17),S(23),PA.lt,PA.md,PA.dk);
+  limb(X,rkx,rky,rax,ray,S(16),S(13),S(17),PA.lt,PA.md,PA.dk);
+  joint(X,rhx,rhy,S(15),PA.md);
+  joint(X,rkx,rky,S(12),PA.dk);
+  foot(X,rax,ray,hR-kR+.08);
+}
+
+/* ============ 动画循环 ============ */
+function anim(ts){
+  requestAnimationFrame(anim);
+  draw(((ts%(CY_MS/spd))/(CY_MS/spd))*Math.PI*2);
+}
+
+/* ============ 键盘 ============ */
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k==='arrowleft')spd=Math.max(.3,spd-.1);
+  if(k==='arrowright')spd=Math.min(3,spd+.1);
+  if(k==='r')spd=1;
+});
+
+requestAnimationFrame(anim);
+})();
+</script>
+</body>
+</html>

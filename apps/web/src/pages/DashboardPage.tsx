@@ -48,7 +48,27 @@ function StatCard({ label, value, color, icon, to }: {
       <Text fw={700} fz={28}>{value}</Text>
     </Paper>
   )
-  return to ? <Link to={to} style={{ textDecoration: 'none', color: 'inherit' }}>{content}</Link> : content
+}
+
+function PredictiveBadge({ patientId, patientName }: { patientId: string; patientName: string }) {
+  const { data } = useQuery<any>({
+    queryKey: ['predictive-alerts', patientId],
+    queryFn: () => http.get(`/dashboard/predictive-alerts/${patientId}`).then((r) => r.data),
+    refetchInterval: 60000,
+  })
+  if (!data?.trends?.length) return null
+  const color = data.riskLevel === 'critical' ? 'red' : data.riskLevel === 'high' ? 'orange' : 'yellow'
+  return (
+    <Paper p="xs" withBorder style={{ borderLeft: `3px solid var(--mantine-color-${color}-5)` }}>
+      <Group gap="xs" wrap="nowrap">
+        <IconAlertTriangle size={16} color={`var(--mantine-color-${color}-5)`} />
+        <div style={{ flex: 1 }}>
+          <Text size="xs" fw={500} truncate>{patientName}</Text>
+          <Text size="xs" c={color}>{data.riskLevel === 'critical' ? '紧急' : data.riskLevel === 'high' ? '高风险' : '注意'} · {data.trends.length}项</Text>
+        </div>
+      </Group>
+    </Paper>
+  )
 }
 
 function TrendBars({ data }: { data: TrendRow[] }) {
@@ -147,6 +167,26 @@ export function DashboardPage() {
           <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="xs">
             {(patients as any[]).slice(0, 6).map((p: any) => (
               <SafetyIndexBadge key={p.id} patientId={p.id} patientName={p.name} />
+            ))}
+          </SimpleGrid>
+        </Card>
+      )}
+
+      {patients && patients.length > 0 && (
+        <Card withBorder mb="md">
+          <Group mb="sm"><IconAlertTriangle size={16} color="var(--mantine-color-orange-5)" /><Text fw={600}>预测性告警</Text><Badge size="xs" color="orange">AI 趋势分析</Badge></Group>
+          <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="xs">
+            {(patients as any[]).slice(0, 6).map((p: any) => (<PredictiveBadge key={p.id} patientId={p.id} patientName={p.name} />))}
+          </SimpleGrid>
+        </Card>
+      )}
+
+      {patients && patients.length > 0 && (
+        <Card withBorder mb="md">
+          <Text fw={600} mb="sm">日常评估</Text>
+          <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="xs">
+            {(patients as any[]).slice(0, 6).map((p: any) => (
+              <DailyBadge key={p.id} patientId={p.id} patientName={p.name} />
             ))}
           </SimpleGrid>
         </Card>
@@ -253,6 +293,29 @@ function SafetyIndexBadge({ patientId, patientName }: { patientId: string; patie
         <div style={{ flex: 1 }}>
           <Text size="xs" fw={500} truncate>{patientName}</Text>
           <Text size="xs" c={color}>{status}</Text>
+        </div>
+      </Group>
+    </Paper>
+  )
+}
+
+function DailyBadge({ patientId, patientName }: { patientId: string; patientName: string }) {
+  const { data } = useQuery<any>({
+    queryKey: ['daily-assessment', patientId],
+    queryFn: () => http.get(`/dashboard/daily-assessment/${patientId}`).then((r) => r.data),
+    refetchInterval: 60000,
+  })
+  const score = data?.overallScore ?? 0
+  const color = score >= 75 ? 'green' : score >= 55 ? 'orange' : 'red'
+  return (
+    <Paper p="xs" withBorder>
+      <Group gap="xs" wrap="nowrap">
+        <RingProgress size={44} thickness={4}
+          sections={[{ value: score, color }]}
+          label={<Text size="xs" fw={700} ta="center">{score}</Text>} />
+        <div style={{ flex: 1 }}>
+          <Text size="xs" fw={500} truncate>{patientName}</Text>
+          <Text size="xs" c={color}>{score >= 75 ? '良好' : score >= 55 ? '注意' : '待改善'}</Text>
         </div>
       </Group>
     </Paper>

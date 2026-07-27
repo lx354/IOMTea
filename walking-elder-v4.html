@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高龄老人行走</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #fff; }
+  canvas { display: block; }
+  .hint {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: #999; font: 13px 'PingFang SC','Microsoft YaHei',sans-serif;
+    letter-spacing: 1px; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hint">← → 调速 &nbsp; R 重置</div>
+<script>
+(function() {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  let W, H;
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  /* ============ 身体比例常量 ============ */
+  const SCALE = Math.min(W, H) / 620;
+  const S  = (v) => v * SCALE;
+  const HEAD_H      = S(60);
+  const HEAD_W      = S(44);
+  const NECK_H      = S(22);
+  const TORSO_H     = S(148);
+  const THIGH_H     = S(105);
+  const SHIN_H      = S(95);
+  const FOOT_L      = S(38);
+  const UPPER_ARM_H = S(70);
+  const LOWER_ARM_H = S(64);
+  const HAND_R      = S(14);
+  const SHOULDER_W  = S(82);
+  const HIP_W       = S(60);
+  const GROUND_Y    = H * 0.72;
+
+  /* ============ 步态参数 ============ */
+  const CYCLE_MS    = 2100;
+  const HIP_MAX     = 14   * Math.PI / 180;
+  const KNEE_SWING  = 30   * Math.PI / 180;
+  const KNEE_STANCE = 2.0  * Math.PI / 180;
+  const SHOULDER_M  = 9    * Math.PI / 180;
+  const ELBOW_SWING = 8    * Math.PI / 180;
+  const TORSO_LEAN  = 5.5  * Math.PI / 180;
+  const TORSO_SWAY  = 2.5  * Math.PI / 180;
+  const BODY_LIFT   = S(4.5);
+  const BODY_SHIFT  = S(2.0);
+
+  let speedMul = 1.0;
+
+  /* ============ 颜色 ============ */
+  const SKIN_LT   = '#f2d0b0';
+  const SKIN_MD   = '#e8c0a0';
+  const SKIN_DK   = '#d4a888';
+  const HAIR_LT   = '#e0e0e0';
+  const HAIR_DK   = '#b8b8b8';
+  const SHIRT_LT  = '#f8f6f2';
+  const SHIRT_MD  = '#ece8e2';
+  const SHIRT_DK  = '#d8d4ce';
+  const PANTS_LT  = '#4a4e54';
+  const PANTS_MD  = '#3a3e44';
+  const PANTS_DK  = '#2a2e34';
+  const SHOE_CLR  = '#1a1a1a';
+  const SOLE_CLR  = '#2e2e2e';
+
+  /* ============ 辅助函数 ============ */
+  function kneeAngle(phase) {
+    const s = Math.sin(phase);
+    return Math.max(0, -s) * KNEE_SWING + Math.max(0, s) * KNEE_STANCE;
+  }
+  function elbowAngle(phase) {
+    return Math.max(0, Math.sin(phase)) * ELBOW_SWING;
+  }
+
+  /* ---- 绘制渐变肢体 ---- */
+  function drawLimb(c, x1, y1, x2, y2, wTop, wBot, wMid, clr1, clr2, clr3) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+
+    const p = [
+      x1 + nx * wTop, y1 + ny * wTop,
+      mx + nx * wMid, my + ny * wMid,
+      x2 + nx * wBot, y2 + ny * wBot,
+      x2 - nx * wBot, y2 - ny * wBot,
+      mx - nx * wMid, my - ny * wMid,
+      x1 - nx * wTop, y1 - ny * wTop,
+    ];
+
+    c.beginPath();
+    c.moveTo(p[0], p[1]);
+    c.bezierCurveTo(p[0] + dx*0.08, p[1] + dy*0.08, p[2] + dx*0.05, p[3] + dy*0.05, p[2], p[3]);
+    c.bezierCurveTo(p[2] - dx*0.05, p[3] - dy*0.05, p[4] - dx*0.08, p[5] - dy*0.08, p[4], p[5]);
+    c.lineTo(p[6], p[7]);
+    c.bezierCurveTo(p[6] - dx*0.08, p[7] - dy*0.08, p[8] - dx*0.05, p[9] - dy*0.05, p[8], p[9]);
+    c.bezierCurveTo(p[8] + dx*0.05, p[9] + dy*0.05, p[10]+ dx*0.08, p[11]+ dy*0.08, p[10], p[11]);
+    c.closePath();
+
+    const grad = c.createLinearGradient(x1 - nx*wMid, y1 - ny*wMid, x1 + nx*wMid, y1 + ny*wMid);
+    grad.addColorStop(0, clr3);
+    grad.addColorStop(0.35, clr2);
+    grad.addColorStop(0.7, clr1);
+    grad.addColorStop(1, clr2);
+    c.fillStyle = grad;
+    c.fill();
+
+    c.strokeStyle = 'rgba(0,0,0,0.1)';
+    c.lineWidth = S(0.8);
+    c.stroke();
+  }
+
+  /* ---- 躯干 ---- */
+  function drawTorso(c, sx, sy, hx, hy, hlw, hrw, lean) {
+    // 躯干从肩(sx,sy)到髋(hx,hy), 有前后轮廓
+    const dx = hx - sx, dy = hy - sy;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const nx = -dy / len, ny = dx / len; // 法线(前)
+
+    // 胸廓稍宽, 腰部收窄, 腹部微凸 (老年特征)
+    const shW = hlw;
+    const midW = hlw * 0.78;
+    const hipW = hrw;
+    const bellyBump = S(9);
+
+    const my1 = sy + (hy - sy) * 0.35;
+    const my2 = sy + (hy - sy) * 0.72;
+
+    // 前轮廓 (胸部/腹部)
+    const fx1 = sx + nx * shW * 0.5;
+    const fy1 = sy + ny * shW * 0.5;
+    const fm1x = (sx+hx)/2 + nx * midW * 0.3 + dx*0.04;
+    const fm1y = (sy+hy)/2 + ny * midW * 0.3 + dy*0.04;
+    const fbumpx = hx - nx * bellyBump + nx * hipW * 0.35;
+    const fbumpy = hy - ny * bellyBump + ny * hipW * 0.35;
+
+    // 后轮廓 (背部 — 老年驼背)
+    const bx1 = sx - nx * shW * 0.5;
+    const by1 = sy - ny * shW * 0.5;
+    const hunchX = sx + dx*0.18 - nx * S(18);
+    const hunchY = sy + dy*0.18 - ny * S(18);
+    const bm1x = (sx+hx)/2 - nx * midW * 0.15;
+    const bm1y = (sy+hy)/2 - ny * midW * 0.15;
+    const bhx = hx - nx * hipW * 0.35;
+    const bhy = hy - ny * hipW * 0.35;
+
+    c.beginPath();
+    c.moveTo(fx1, fy1);
+    c.bezierCurveTo(fx1 + dx*0.2, fy1 + dy*0.2, fm1x, fm1y, fbumpx, fbumpy);
+    c.quadraticCurveTo(bhx + nx*S(5), bhy + ny*S(5), bhx, bhy);
+    c.bezierCurveTo(bm1x, bm1y, hunchX, hunchY, bx1, by1);
+    c.closePath();
+
+    const grad = c.createLinearGradient(sx - nx*S(30), sy - ny*S(30), sx + nx*S(30), sy + ny*S(30));
+    grad.addColorStop(0, SHIRT_DK);
+    grad.addColorStop(0.3, SHIRT_MD);
+    grad.addColorStop(0.65, SHIRT_LT);
+    grad.addColorStop(1, SHIRT_DK);
+    c.fillStyle = grad;
+    c.fill();
+
+    c.strokeStyle = 'rgba(0,0,0,0.08)';
+    c.lineWidth = S(1);
+    c.stroke();
+
+    // 衣扣线
+    c.beginPath();
+    c.moveTo(sx - nx*S(2), sy - ny*S(2));
+    c.lineTo(hx - nx*S(4), hy - ny*S(4));
+    c.strokeStyle = 'rgba(0,0,0,0.06)';
+    c.lineWidth = S(0.6);
+    c.setLineDash([S(5), S(6)]);
+    c.stroke();
+    c.setLineDash([]);
+  }
+
+  /* ---- 头部 + 脖子 ---- */
+  function drawHeadNeck(c, hx, hy, nbx, nby, hScale) {
+    // 脖子
+    c.beginPath();
+    c.moveTo(nbx - S(10), nby);
+    c.bezierCurveTo(nbx - S(9), nby + S(6), hx - S(12), hy + S(18), hx - S(10), hy - S(6));
+    c.lineTo(hx + S(10), hy - S(8));
+    c.bezierCurveTo(hx + S(12), hy + S(16), nbx + S(9), nby + S(6), nbx + S(10), nby);
+    c.closePath();
+    const neckGrad = c.createLinearGradient(nbx - S(14), nby, nbx + S(14), nby);
+    neckGrad.addColorStop(0, SKIN_DK);
+    neckGrad.addColorStop(0.4, SKIN_MD);
+    neckGrad.addColorStop(0.7, SKIN_LT);
+    neckGrad.addColorStop(1, SKIN_DK);
+    c.fillStyle = neckGrad;
+    c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.06)';
+    c.lineWidth = S(0.7);
+    c.stroke();
+
+    // 头部椭圆
+    c.save();
+    c.translate(hx, hy);
+    c.scale(1, hScale);
+    c.beginPath();
+    c.ellipse(0, 0, HEAD_W/2, HEAD_H/2, 0, 0, Math.PI * 2);
+    c.closePath();
+
+    const headGrad = c.createLinearGradient(-HEAD_W/2, 0, HEAD_W/2, 0);
+    headGrad.addColorStop(0, SKIN_DK);
+    headGrad.addColorStop(0.35, SKIN_MD);
+    headGrad.addColorStop(0.7, SKIN_LT);
+    headGrad.addColorStop(1, SKIN_MD);
+    c.fillStyle = headGrad;
+    c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.07)';
+    c.lineWidth = S(0.8);
+    c.stroke();
+    c.restore();
+
+    // 白发 (头顶 + 两侧)
+    c.save();
+    c.translate(hx, hy);
+    c.beginPath();
+    c.ellipse(S(2), -S(8), HEAD_W/2 + S(2), HEAD_H/2 - S(4), -0.08, Math.PI*1.05, Math.PI*1.95);
+    const hairGrad = c.createLinearGradient(-HEAD_W/2, -HEAD_H/2, HEAD_W/2, -HEAD_H/4);
+    hairGrad.addColorStop(0, HAIR_DK);
+    hairGrad.addColorStop(0.5, HAIR_LT);
+    hairGrad.addColorStop(1, HAIR_DK);
+    c.fillStyle = hairGrad;
+    c.fill();
+
+    // 两侧鬓发
+    c.beginPath();
+    c.ellipse(-HEAD_W/2 + S(3), S(2), S(12), S(20), 0.3, -0.6, 1.0);
+    c.fillStyle = HAIR_DK;
+    c.fill();
+    c.beginPath();
+    c.ellipse(HEAD_W/2 - S(3), S(2), S(12), S(20), -0.3, Math.PI - 1.0, Math.PI + 0.6);
+    c.fill();
+
+    // 耳朵
+    c.beginPath();
+    c.ellipse(-HEAD_W/2 + S(4), S(5), S(7), S(12), -0.25, 0, Math.PI*2);
+    c.fillStyle = SKIN_MD;
+    c.fill();
+    c.restore();
+
+    // 五官 (在头部坐标系外绘制, 简化计算)
+    const fx = hx, fy = hy;
+    // 眉毛 (花白, 微八字 — 老年特征)
+    c.beginPath();
+    c.moveTo(fx - S(14), fy - S(8));
+    c.quadraticCurveTo(fx - S(4), fy - S(14), fx + S(4), fy - S(12));
+    c.strokeStyle = '#b0b0b0';
+    c.lineWidth = S(2.2);
+    c.lineCap = 'round';
+    c.stroke();
+    c.beginPath();
+    c.moveTo(fx - S(4), fy - S(12));
+    c.quadraticCurveTo(fx + S(4), fy - S(14), fx + S(16), fy - S(8));
+    c.stroke();
+
+    // 眼睛 (略小, 有眼袋 — 老年特征)
+    [fx - S(8), fx + S(10)].forEach(ex => {
+      // 眼白
+      c.beginPath();
+      c.ellipse(ex, fy - S(2), S(5), S(4.5), 0, 0, Math.PI*2);
+      c.fillStyle = '#fafafa';
+      c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.25)';
+      c.lineWidth = S(0.8);
+      c.stroke();
+      // 虹膜
+      c.beginPath();
+      c.arc(ex + S(1), fy - S(2), S(3), 0, Math.PI*2);
+      c.fillStyle = '#3a3028';
+      c.fill();
+      // 瞳孔
+      c.beginPath();
+      c.arc(ex + S(1.5), fy - S(2), S(1.5), 0, Math.PI*2);
+      c.fillStyle = '#111';
+      c.fill();
+      // 高光
+      c.beginPath();
+      c.arc(ex + S(0.5), fy - S(3.5), S(0.8), 0, Math.PI*2);
+      c.fillStyle = '#fff';
+      c.fill();
+      // 眼袋
+      c.beginPath();
+      c.ellipse(ex + S(1), fy + S(5), S(6), S(3.5), 0, 0, Math.PI);
+      c.strokeStyle = 'rgba(0,0,0,0.06)';
+      c.lineWidth = S(1);
+      c.stroke();
+    });
+
+    // 鼻子
+    c.beginPath();
+    c.moveTo(fx + S(0), fy - S(4));
+    c.quadraticCurveTo(fx + S(2), fy + S(8), fx - S(1), fy + S(9));
+    c.quadraticCurveTo(fx + S(5), fy + S(9), fx + S(4), fy + S(5));
+    c.strokeStyle = 'rgba(0,0,0,0.18)';
+    c.lineWidth = S(1.3);
+    c.stroke();
+    // 鼻头
+    c.beginPath();
+    c.ellipse(fx + S(2), fy + S(8), S(5), S(4), -0.1, 0, Math.PI*2);
+    c.fillStyle = SKIN_MD;
+    c.fill();
+
+    // 嘴巴 (和蔼微笑)
+    c.beginPath();
+    c.moveTo(fx - S(6), fy + S(14));
+    c.quadraticCurveTo(fx + S(1), fy + S(20), fx + S(8), fy + S(15));
+    c.strokeStyle = '#b87060';
+    c.lineWidth = S(1.5);
+    c.lineCap = 'round';
+    c.stroke();
+
+    // 法令纹
+    c.beginPath();
+    c.moveTo(fx - S(2), fy + S(10));
+    c.quadraticCurveTo(fx - S(5), fy + S(16), fx - S(6), fy + S(20));
+    c.strokeStyle = 'rgba(0,0,0,0.05)';
+    c.lineWidth = S(0.9);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(fx + S(4), fy + S(10));
+    c.quadraticCurveTo(fx + S(7), fy + S(16), fx + S(8), fy + S(20));
+    c.stroke();
+
+    // 老花镜
+    c.beginPath();
+    c.ellipse(fx - S(8), fy - S(2), S(10), S(9), 0.05, 0, Math.PI*2);
+    c.strokeStyle = '#555';
+    c.lineWidth = S(1.5);
+    c.stroke();
+    c.beginPath();
+    c.ellipse(fx + S(10), fy - S(2), S(10), S(9), -0.05, 0, Math.PI*2);
+    c.stroke();
+    // 镜桥
+    c.beginPath();
+    c.moveTo(fx - S(1), fy - S(4));
+    c.quadraticCurveTo(fx + S(1), fy - S(8), fx + S(2), fy - S(5));
+    c.strokeStyle = '#555';
+    c.lineWidth = S(1.2);
+    c.stroke();
+    // 镜腿
+    c.beginPath();
+    c.moveTo(fx - S(17), fy - S(1));
+    c.lineTo(fx - S(24), fy + S(6));
+    c.stroke();
+  }
+
+  /* ---- 脚 ---- */
+  function drawFoot(c, ax, ay, angle, front) {
+    c.save();
+    c.translate(ax, ay);
+    c.rotate(angle);
+    // 鞋
+    c.beginPath();
+    c.moveTo(S(6), -S(6));
+    c.bezierCurveTo(S(34), -S(12), S(38), S(2), S(30), S(7));
+    c.lineTo(-S(4), S(7));
+    c.bezierCurveTo(-S(6), S(1), -S(4), -S(4), S(6), -S(6));
+    c.closePath();
+    const shoeGrad = c.createLinearGradient(0, -S(8), 0, S(8));
+    shoeGrad.addColorStop(0, SHOE_CLR);
+    shoeGrad.addColorStop(0.5, '#2e2e2e');
+    shoeGrad.addColorStop(1, SHOE_CLR);
+    c.fillStyle = shoeGrad;
+    c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.2)';
+    c.lineWidth = S(0.8);
+    c.stroke();
+    // 鞋底
+    c.beginPath();
+    c.moveTo(-S(2), S(7));
+    c.bezierCurveTo(S(12), S(10), S(26), S(10), S(30), S(7));
+    c.lineTo(S(30), S(11));
+    c.bezierCurveTo(S(26), S(14), S(12), S(14), -S(2), S(11));
+    c.closePath();
+    c.fillStyle = SOLE_CLR;
+    c.fill();
+    c.restore();
+  }
+
+  /* ---- 手掌 ---- */
+  function drawHand(c, hx, hy, dir) {
+    c.beginPath();
+    c.arc(hx, hy, HAND_R, 0, Math.PI*2);
+    c.fillStyle = SKIN_LT;
+    c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.1)';
+    c.lineWidth = S(0.6);
+    c.stroke();
+  }
+
+  /* ---- 关节球 (平滑连接) ---- */
+  function drawJoint(c, x, y, r, color) {
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI*2);
+    const g = c.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0.1)');
+    c.fillStyle = g;
+    c.fill();
+  }
+
+  /* ============ 主绘制 ============ */
+  function draw(phase) {
+    ctx.clearRect(0, 0, W, H);
+
+    const s   = Math.sin(phase);
+    const c   = Math.abs(Math.cos(phase));
+    const cos = Math.cos(phase);
+
+    const hipR = HIP_MAX * s;
+    const hipL = HIP_MAX * Math.sin(phase + Math.PI);
+    const kneeR = kneeAngle(phase);
+    const kneeL = kneeAngle(phase + Math.PI);
+    const shR = SHOULDER_M * Math.sin(phase + Math.PI);
+    const shL = SHOULDER_M * s;
+    const elR = elbowAngle(phase + Math.PI);
+    const elL = elbowAngle(phase);
+    const lean = TORSO_LEAN + S(1.2) * Math.PI/180 * c;
+    const sway = TORSO_SWAY * cos;
+    const lift = BODY_LIFT * Math.abs(s);
+    const shift = BODY_SHIFT * s;
+
+    // 根骨骼位置
+    const rootX = W * 0.5 + shift;
+    const rootY = GROUND_Y - THIGH_H - SHIN_H - S(6) - lift;
+
+    // 髋 → 肩
+    const shoulderX = rootX + Math.sin(lean) * TORSO_H;
+    const shoulderY = rootY - Math.cos(lean) * TORSO_H;
+
+    // 脖子基部
+    const neckX = shoulderX + Math.sin(lean) * S(18);
+    const neckY = shoulderY - Math.cos(lean) * S(18);
+
+    // 头部中心
+    const headX = neckX + Math.sin(lean) * S(6);
+    const headY = neckY - NECK_H - HEAD_H * 0.35;
+
+    /* ---- 远侧 (左) 肢体 ---- */
+    const lhipX = rootX - Math.cos(lean)*S(10) - Math.sin(lean)*S(2);
+    const lhipY = rootY + Math.sin(lean)*S(10) - Math.cos(lean)*S(2);
+
+    const lkneeX = lhipX + Math.sin(hipL) * THIGH_H;
+    const lkneeY = lhipY + Math.cos(hipL) * THIGH_H;
+    const lankleX = lkneeX + Math.sin(hipL - kneeL) * SHIN_H;
+    const lankleY = lkneeY + Math.cos(hipL - kneeL) * SHIN_H;
+
+    const lshX = shoulderX - Math.cos(lean)*S(12) - Math.sin(lean)*S(2);
+    const lshY = shoulderY + Math.sin(lean)*S(12) - Math.cos(lean)*S(2);
+    const lelbX = lshX + Math.sin(shL) * UPPER_ARM_H;
+    const lelbY = lshY + Math.cos(shL) * UPPER_ARM_H;
+    const lhndX = lelbX + Math.sin(shL - elL) * LOWER_ARM_H;
+    const lhndY = lelbY + Math.cos(shL - elL) * LOWER_ARM_H;
+
+    /* ---- 近侧 (右) 肢体 ---- */
+    const rhipX = rootX + Math.cos(lean)*S(10) - Math.sin(lean)*S(2);
+    const rhipY = rootY - Math.sin(lean)*S(10) - Math.cos(lean)*S(2);
+
+    const rkneeX = rhipX + Math.sin(hipR) * THIGH_H;
+    const rkneeY = rhipY + Math.cos(hipR) * THIGH_H;
+    const rankleX = rkneeX + Math.sin(hipR - kneeR) * SHIN_H;
+    const rankleY = rkneeY + Math.cos(hipR - kneeR) * SHIN_H;
+
+    const rshX = shoulderX + Math.cos(lean)*S(12) - Math.sin(lean)*S(2);
+    const rshY = shoulderY - Math.sin(lean)*S(12) - Math.cos(lean)*S(2);
+    const relbX = rshX + Math.sin(shR) * UPPER_ARM_H;
+    const relbY = rshY + Math.cos(shR) * UPPER_ARM_H;
+    const rhndX = relbX + Math.sin(shR - elR) * LOWER_ARM_H;
+    const rhndY = relbY + Math.cos(shR - elR) * LOWER_ARM_H;
+
+    /* ---- 阴影 ---- */
+    ctx.beginPath();
+    ctx.ellipse(rootX, GROUND_Y + S(2), S(28) * (0.8 + 0.2*c), S(6) * (0.8 + 0.2*c), 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.fill();
+
+    /* ======== 绘制顺序: 远 → 近 ======== */
+
+    // 左臂 (远)
+    ctx.globalAlpha = 0.72;
+    drawLimb(ctx, lshX, lshY, lelbX, lelbY, S(11), S(9), S(12), SKIN_LT, SKIN_MD, SKIN_DK);
+    drawLimb(ctx, lelbX, lelbY, lhndX, lhndY, S(8), S(7), S(9), SKIN_LT, SKIN_MD, SKIN_DK);
+    drawJoint(ctx, lshX, lshY, S(10), SKIN_MD);
+    drawJoint(ctx, lelbX, lelbY, S(7), SKIN_MD);
+    drawHand(ctx, lhndX, lhndY);
+    ctx.globalAlpha = 1;
+
+    // 左腿 (远)
+    ctx.globalAlpha = 0.68;
+    drawLimb(ctx, lhipX, lhipY, lkneeX, lkneeY, S(20), S(16), S(22), PANTS_LT, PANTS_MD, PANTS_DK);
+    drawLimb(ctx, lkneeX, lkneeY, lankleX, lankleY, S(15), S(12), S(16), PANTS_LT, PANTS_MD, PANTS_DK);
+    drawJoint(ctx, lhipX, lhipY, S(14), PANTS_MD);
+    drawJoint(ctx, lkneeX, lkneeY, S(11), PANTS_DK);
+    drawFoot(ctx, lankleX, lankleY, hipL - kneeL + 0.1, false);
+    ctx.globalAlpha = 1;
+
+    // 躯干
+    drawTorso(ctx, shoulderX, shoulderY, rootX, rootY, SHOULDER_W, HIP_W, lean);
+    drawJoint(ctx, rootX, rootY, S(18), SHIRT_MD); // 髋部连接
+    drawJoint(ctx, shoulderX, shoulderY, S(16), SHIRT_MD); // 肩部连接
+
+    // 头部 + 脖子
+    drawHeadNeck(ctx, headX, headY, neckX, neckY, 1.12);
+
+    // 右臂 (近)
+    drawLimb(ctx, rshX, rshY, relbX, relbY, S(12), S(10), S(13), SKIN_LT, SKIN_MD, SKIN_DK);
+    drawLimb(ctx, relbX, relbY, rhndX, rhndY, S(9), S(8), S(10), SKIN_LT, SKIN_MD, SKIN_DK);
+    drawJoint(ctx, rshX, rshY, S(11), SKIN_MD);
+    drawJoint(ctx, relbX, relbY, S(8), SKIN_MD);
+    drawHand(ctx, rhndX, rhndY);
+
+    // 右腿 (近)
+    drawLimb(ctx, rhipX, rhipY, rkneeX, rkneeY, S(21), S(17), S(23), PANTS_LT, PANTS_MD, PANTS_DK);
+    drawLimb(ctx, rkneeX, rkneeY, rankleX, rankleY, S(16), S(13), S(17), PANTS_LT, PANTS_MD, PANTS_DK);
+    drawJoint(ctx, rhipX, rhipY, S(15), PANTS_MD);
+    drawJoint(ctx, rkneeX, rkneeY, S(12), PANTS_DK);
+    drawFoot(ctx, rankleX, rankleY, hipR - kneeR + 0.1, true);
+  }
+
+  /* ============ 动画循环 ============ */
+  function animate(ts) {
+    requestAnimationFrame(animate);
+    const cycle = CYCLE_MS / speedMul;
+    const phase = ((ts % cycle) / cycle) * Math.PI * 2;
+    draw(phase);
+  }
+
+  /* ============ 键盘 ============ */
+  window.addEventListener('keydown', (e) => {
+    switch (e.key.toLowerCase()) {
+      case 'arrowleft':  speedMul = Math.max(0.3,  speedMul - 0.1); break;
+      case 'arrowright': speedMul = Math.min(3.0,  speedMul + 0.1); break;
+      case 'r':          speedMul = 1.0; break;
+    }
+  });
+
+  requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

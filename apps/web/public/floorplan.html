@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>居家环境 — 认知障碍老人监测系统</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--bg-deep:#0a0e14;--bg-panel:#111922;--bg-card:#161f2c;--border:rgba(255,255,255,.06);--text:#c8d6e5;--text-dim:#5a6a7e;--accent:#45aaf2;--accent-glow:rgba(69,170,242,.25);--warn:#fc5c65;--success:#20bf6b;--gold:#b8963e;--teal:#2bcbba;--orange:#fd9644}
+  body{background:var(--bg-deep);font-family:'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;color:var(--text);min-height:100vh;overflow-x:hidden}
+  .bg-particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+  .app{position:relative;z-index:1;display:grid;grid-template-columns:320px 1fr;grid-template-rows:auto 1fr;gap:14px;padding:16px 20px 20px;max-width:1400px;margin:0 auto;min-height:100vh}
+  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;background:var(--bg-panel);border-radius:14px;padding:12px 24px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.4)}
+  .topbar-brand{display:flex;align-items:center;gap:12px}
+  .topbar-brand .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--teal));display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff}
+  .topbar-brand h1{font-size:17px;font-weight:600;letter-spacing:1.5px;background:linear-gradient(135deg,#a0c4ff,#48dbfb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .topbar-meta{display:flex;align-items:center;gap:20px;font-size:13px;color:var(--text-dim)}
+  .topbar-meta .live{display:flex;align-items:center;gap:6px}
+  .topbar-meta .live-dot{width:9px;height:9px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);animation:glow-dot 2s ease-in-out infinite}
+  @keyframes glow-dot{0%,100%{box-shadow:0 0 6px var(--success)}50%{box-shadow:0 0 16px var(--success)}}
+  .btn-heatmap{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-dim);font-size:12px;cursor:pointer;letter-spacing:1px;transition:.25s}
+  .btn-heatmap:hover{border-color:rgba(184,150,62,.4);color:var(--gold)}
+  .btn-heatmap.active{background:rgba(184,150,62,.12);border-color:var(--gold);color:var(--gold)}
+  .clock{font-variant-numeric:tabular-nums;font-size:14px;color:#8395a7}
+  .sidebar{display:flex;flex-direction:column;gap:14px}
+  .panel{background:var(--bg-panel);border-radius:14px;padding:18px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.35);position:relative;overflow:hidden}
+  .panel::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent)}
+  .panel-title{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:var(--text-dim);margin-bottom:14px;font-weight:600}
+  .elder-card{text-align:center}
+  .elder-avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#45aaf2,#2d98da);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;box-shadow:0 0 24px var(--accent-glow);position:relative}
+  .elder-avatar .badge{position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--success);border:2px solid var(--bg-panel)}
+  .elder-name{font-size:18px;font-weight:700;color:#dfe6e9}.elder-sub{font-size:12px;color:var(--text-dim);margin-top:2px}
+  .risk-ring-wrap{display:flex;justify-content:center;margin:14px 0 10px}
+  .risk-ring{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative}
+  .risk-ring::after{content:'';width:62px;height:62px;border-radius:50%;background:var(--bg-panel);position:absolute}
+  .risk-level{position:relative;z-index:1;font-size:14px;font-weight:700}
+  .vitals-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .vital-item{background:var(--bg-card);border-radius:10px;padding:10px;text-align:center;border:1px solid var(--border)}
+  .vital-value{font-size:20px;font-weight:700;color:#dfe6e9;font-variant-numeric:tabular-nums}
+  .vital-value.normal{color:var(--teal)}.vital-value.warn{color:var(--warn)}.vital-value.attn{color:var(--gold)}
+  .vital-label{font-size:10px;color:var(--text-dim);margin-top:3px}.vital-unit{font-size:11px;color:var(--text-dim);font-weight:400}
+  .dims{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}
+  .dim-item{display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 8px;border-radius:6px;background:var(--bg-card)}
+  .dim-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .dim-dot.good{background:var(--teal)}.dim-dot.warn{background:var(--warn)}.dim-dot.attn{background:var(--gold)}
+  .dim-label{color:#8395a7;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dim-val{font-weight:600;color:#b2bec3;font-variant-numeric:tabular-nums}
+  .timeline{display:flex;flex-direction:column;gap:8px}
+  .timeline-item{display:flex;align-items:center;gap:10px;font-size:12px;padding:8px 10px;border-radius:8px;background:var(--bg-card);border-left:3px solid transparent}
+  .timeline-item.current{border-left-color:var(--accent);background:rgba(69,170,242,.06)}
+  .tl-time{color:var(--text-dim);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:44px}
+  .tl-room{color:#b2bec3;font-weight:600}.tl-dur{color:var(--text-dim);margin-left:auto}
+  .tl-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0}
+  .summary-section{margin-top:12px}.summary-section:first-child{margin-top:0}
+  .summary-label{font-size:11px;color:var(--text-dim);margin-bottom:8px;font-weight:600;letter-spacing:1px}
+  .summary-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .summary-bar-tag{font-size:11px;color:#8395a7;min-width:28px;text-align:center}
+  .summary-bar-track{flex:1;height:8px;border-radius:4px;background:var(--bg-card);overflow:hidden}
+  .summary-bar-fill{height:100%;border-radius:4px;transition:width .5s}
+  .summary-bar-fill.walk{background:var(--teal)}.summary-bar-fill.sit{background:var(--gold)}.summary-bar-fill.lie{background:#a55eea}
+  .summary-bar-fill.room{background:var(--accent)}
+  .summary-bar-val{font-size:11px;color:#b2bec3;font-weight:600;min-width:48px;text-align:right;font-variant-numeric:tabular-nums}
+  .summary-divider{border:none;border-top:1px solid var(--border);margin:10px 0}
+  .main-area{display:flex;flex-direction:column;gap:14px}
+  .floorplan-wrap{flex:1;display:flex;align-items:center;justify-content:center}
+  .floorplan-card{background:var(--bg-panel);border-radius:14px;padding:16px;border:1px solid var(--border);box-shadow:0 4px 24px rgba(0,0,0,.45);position:relative;overflow:hidden}
+  .floorplan-card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 20%,rgba(69,170,242,.04) 0%,transparent 55%),radial-gradient(circle at 70% 80%,rgba(252,92,101,.03) 0%,transparent 55%);pointer-events:none}
+  svg.floorplan{display:block;border-radius:8px;position:relative;z-index:1}
+  .room-label{font-size:16px;font-weight:700;letter-spacing:2px;pointer-events:none;fill:#4a3028}
+  .clickable-room{cursor:pointer;transition:filter .2s}.clickable-room:hover{filter:brightness(1.05)}
+  .door-line{stroke:#b8963e;stroke-width:2.2;stroke-linecap:round}
+  .door-arc{stroke:rgba(184,150,62,.3);stroke-width:1.2;stroke-dasharray:3 4;fill:none}
+  .window-line{stroke:var(--accent);stroke-width:2.5;stroke-linecap:round}
+  .window-glow{stroke:rgba(69,170,242,.15);stroke-width:7;stroke-linecap:round}
+  .elder-group{cursor:pointer}.elder-group:hover .elder-glow-el{opacity:1}
+  @keyframes pulse-sensor{0%,100%{opacity:.5;r:3.5}50%{opacity:1;r:5.5}}.sensor-dot{animation:pulse-sensor 2s ease-in-out infinite}
+  @keyframes steam{0%{opacity:0;transform:translateY(0)}30%{opacity:.4}100%{opacity:0;transform:translateY(-14px)}}.steam{animation:steam 2.5s ease-out infinite}
+  .hm-overlay{transition:opacity .5s}
+  .hm-legend-bar{width:16px;height:8px;border-radius:2px}
+  .toast{position:fixed;top:24px;left:50%;transform:translateX(-50%);background:var(--bg-card);color:#fff;padding:10px 28px;border-radius:30px;font-size:14px;letter-spacing:1px;border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;z-index:999;transition:opacity .3s,transform .3s}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(8px)}
+  .bottom-panels{display:flex;gap:14px;margin-top:14px}
+  .bottom-panels .dims{grid-template-columns:1fr 1fr 1fr}
+  .status-strip{display:flex;gap:14px;align-items:center;background:var(--bg-panel);border-radius:12px;padding:12px 20px;border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.3);font-size:13px}
+  .status-strip .label{color:var(--text-dim)}.status-strip .value{color:#dfe6e9;font-weight:600}.status-strip .value.highlight{color:var(--accent)}
+  .status-strip .sep{width:1px;height:16px;background:var(--border)}
+  @media(max-width:1200px){.app{grid-template-columns:1fr}.sidebar{order:2}.main-area{order:1}}
+</style>
+</head>
+<body>
+<canvas class="bg-particles" id="particles"></canvas>
+<div class="toast" id="toast"></div>
+
+<div class="app">
+  <div class="topbar">
+    <div class="topbar-brand"><div class="logo">⌂</div><h1>居家环境</h1></div>
+    <div class="topbar-meta">
+      <button class="btn-heatmap" id="btn-heatmap" onclick="toggleHeatmap()">热力图</button>
+      <span class="live"><span class="live-dot"></span>实时监测中</span><span>传感器 7/7 在线</span><span id="clock" class="clock"></span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel elder-card">
+      <div class="panel-title">监测对象</div>
+      <div class="elder-avatar">👴<div class="badge"></div></div>
+      <div class="elder-name">张建国</div><div class="elder-sub">男 · 78 岁 · 轻度认知障碍</div>
+      <div class="risk-ring-wrap"><div class="risk-ring" id="risk-ring"><span class="risk-level" id="risk-level" style="color:#20bf6b">稳定</span></div></div>
+      <div class="vitals-grid">
+        <div class="vital-item"><div class="vital-value normal" id="vital-hr">72</div><div class="vital-label">心率 <span class="vital-unit">bpm</span></div></div>
+        <div class="vital-item"><div class="vital-value normal" id="vital-spo2">97</div><div class="vital-label">血氧 <span class="vital-unit">%</span></div></div>
+        <div class="vital-item"><div class="vital-value normal" id="vital-bp">128/82</div><div class="vital-label">血压 <span class="vital-unit">mmHg</span></div></div>
+        <div class="vital-item"><div class="vital-value normal" id="vital-temp">36.5</div><div class="vital-label">体温 <span class="vital-unit">°C</span></div></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;font-size:11px;justify-content:center;color:var(--text-dim)">
+        <span>步数 <b style="color:#dfe6e9">3,247</b></span><span>|</span><span>久坐 <b style="color:var(--gold)">2.1h</b></span><span>|</span><span id="elder-room-dur">停留 8min</span>
+      </div>
+    </div>
+
+    <div class="panel" id="daily-summary-panel">
+      <div class="panel-title">每日总结 (今日)</div>
+      <div class="summary-section">
+        <div class="summary-label">活动分布</div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">行走</span><div class="summary-bar-track"><div class="summary-bar-fill walk" id="bar-walk" style="width:18%"></div></div><span class="summary-bar-val" id="val-walk">1.5 h</span></div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">坐</span><div class="summary-bar-track"><div class="summary-bar-fill sit" id="bar-sit" style="width:45%"></div></div><span class="summary-bar-val" id="val-sit">3.8 h</span></div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">躺</span><div class="summary-bar-track"><div class="summary-bar-fill lie" id="bar-lie" style="width:85%"></div></div><span class="summary-bar-val" id="val-lie">7.0 h</span></div>
+      </div>
+      <hr class="summary-divider">
+      <div class="summary-section">
+        <div class="summary-label">各房间时长</div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">客厅</span><div class="summary-bar-track"><div class="summary-bar-fill room" id="bar-living" style="width:40%"></div></div><span class="summary-bar-val" id="val-living">2.4 h</span></div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">卧室</span><div class="summary-bar-track"><div class="summary-bar-fill room" id="bar-bedroom" style="width:92%"></div></div><span class="summary-bar-val" id="val-bedroom">7.8 h</span></div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">厨房</span><div class="summary-bar-track"><div class="summary-bar-fill room" id="bar-kitchen" style="width:22%"></div></div><span class="summary-bar-val" id="val-kitchen">1.3 h</span></div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">餐厅</span><div class="summary-bar-track"><div class="summary-bar-fill room" id="bar-dining" style="width:15%"></div></div><span class="summary-bar-val" id="val-dining">0.9 h</span></div>
+        <div class="summary-bar-wrap"><span class="summary-bar-tag">卫生间</span><div class="summary-bar-track"><div class="summary-bar-fill room" id="bar-bathroom" style="width:6%"></div></div><span class="summary-bar-val" id="val-bathroom">0.3 h</span></div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-dim)">
+        <span>低</span><div class="hm-legend-bar" style="background:rgba(69,170,242,.15)"></div><div class="hm-legend-bar" style="background:rgba(69,170,242,.3)"></div><div class="hm-legend-bar" style="background:rgba(69,170,242,.5)"></div><div class="hm-legend-bar" style="background:rgba(69,170,242,.7)"></div><span>高</span>
+        <span style="margin-left:auto">点击"热力图"查看</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <div class="floorplan-wrap">
+      <div class="floorplan-card">
+<svg class="floorplan" width="940" height="650" viewBox="0 0 940 650" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <!-- 真实光影 -->
+  <filter id="shadowFloor" x="-10%" y="-10%" width="130%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2" result="b"/><feOffset dx="0" dy="2" in="b" result="o"/><feComponentTransfer in="o"><feFuncA type="linear" slope="0.35"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="shadowWall" x="-10%" y="-10%" width="130%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/><feOffset dx="0" dy="3" in="b" result="o"/><feComponentTransfer in="o"><feFuncA type="linear" slope="0.45"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="shadowBed" x="-10%" y="-10%" width="130%" height="130%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/><feOffset dx="-1" dy="2" in="b" result="o"/><feComponentTransfer in="o"><feFuncA type="linear" slope="0.4"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+
+  <!-- 木地板质感 - 人字拼 -->
+  <linearGradient id="woodPlank" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c8a87c"/><stop offset="15%" stop-color="#c4a070"/><stop offset="50%" stop-color="#bf9a68"/><stop offset="85%" stop-color="#ba9460"/><stop offset="100%" stop-color="#b48c58"/></linearGradient>
+  <pattern id="herringbone" width="48" height="24" patternUnits="userSpaceOnUse">
+    <rect width="24" height="12" fill="url(#woodPlank)"/><rect x="24" y="12" width="24" height="12" fill="url(#woodPlank)"/>
+    <rect x="24" y="0" width="24" height="12" fill="#b89460"/><rect x="0" y="12" width="24" height="12" fill="#b89460"/>
+    <line x1="0" y1="11.5" x2="24" y2="11.5" stroke="#a08050" stroke-width="0.4"/><line x1="24" y1="23.5" x2="48" y2="23.5" stroke="#a08050" stroke-width="0.4"/>
+    <line x1="0" y1="12" x2="12" y2="12" stroke="#a08050" stroke-width="0.3"/><line x1="24" y1="0" x2="36" y2="0" stroke="#a08050" stroke-width="0.3"/>
+  </pattern>
+
+  <!-- 石材瓷砖 -->
+  <linearGradient id="stoneTile" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#eae5dd"/><stop offset="40%" stop-color="#e5dfd6"/><stop offset="100%" stop-color="#dcd5c8"/></linearGradient>
+  <pattern id="stoneFloor" width="32" height="32" patternUnits="userSpaceOnUse">
+    <rect width="32" height="32" fill="url(#stoneTile)"/>
+    <rect x="0" y="0" width="16" height="16" fill="#e0d8c8" opacity="0.35"/><rect x="16" y="16" width="16" height="16" fill="#e0d8c8" opacity="0.35"/>
+    <line x1="16" y1="0" x2="16" y2="32" stroke="#d0c8b8" stroke-width="0.4"/><line x1="0" y1="16" x2="32" y2="16" stroke="#d0c8b8" stroke-width="0.4"/>
+  </pattern>
+
+  <!-- 大理石 -->
+  <linearGradient id="marbleBase" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e8e4e0"/><stop offset="50%" stop-color="#e0dcd8"/><stop offset="100%" stop-color="#d8d4d0"/></linearGradient>
+  <pattern id="marble" width="36" height="36" patternUnits="userSpaceOnUse">
+    <rect width="36" height="36" fill="url(#marbleBase)"/>
+    <path d="M4,10 Q12,6 20,12 Q28,18 32,10" fill="none" stroke="#ccc8c4" stroke-width="0.5"/><path d="M2,24 Q14,20 24,26" fill="none" stroke="#c4c0bc" stroke-width="0.4"/>
+    <path d="M10,30 Q18,26 28,32" fill="none" stroke="#d0ccc8" stroke-width="0.3"/><path d="M18,4 Q22,8 26,4" fill="none" stroke="#ccc8c4" stroke-width="0.3"/>
+  </pattern>
+
+  <!-- 卧室木地板 -->
+  <linearGradient id="woodPlank2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d4b896"/><stop offset="50%" stop-color="#cbaa84"/><stop offset="100%" stop-color="#c2a070"/></linearGradient>
+  <pattern id="widePlank" width="40" height="14" patternUnits="userSpaceOnUse">
+    <rect width="40" height="14" fill="url(#woodPlank2)"/><line x1="0" y1="6.5" x2="40" y2="6.5" stroke="#b89064" stroke-width="0.3"/>
+    <line x1="0" y1="13.5" x2="40" y2="13.5" stroke="#a07848" stroke-width="0.5"/>
+  </pattern>
+
+  <!-- 墙面渐变 -->
+  <linearGradient id="wallOuter" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2c3e50"/><stop offset="100%" stop-color="#1a252f"/></linearGradient>
+  <linearGradient id="livingWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f7f3ec"/><stop offset="100%" stop-color="#ece3d4"/></linearGradient>
+  <linearGradient id="bedroomWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f0ecf6"/><stop offset="100%" stop-color="#ddd4eb"/></linearGradient>
+  <linearGradient id="bathWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ebebeb"/><stop offset="100%" stop-color="#dfdfdf"/></linearGradient>
+  <linearGradient id="kitchenWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f5f6f2"/><stop offset="100%" stop-color="#e8ece3"/></linearGradient>
+  <linearGradient id="hallWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#eee4d5"/><stop offset="100%" stop-color="#e0d4c0"/></linearGradient>
+
+  <!-- 3D体积渐变 -->
+  <linearGradient id="surfaceTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity="0.25"/><stop offset="100%" stop-color="#000" stop-opacity="0.08"/></linearGradient>
+  <linearGradient id="surfaceSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.3"/></linearGradient>
+  <linearGradient id="lightTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity="0.3"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+
+<!-- 外墙 -->
+<rect x="14" y="14" width="912" height="622" rx="6" fill="url(#wallOuter)"/>
+<rect x="20" y="20" width="900" height="610" rx="3" fill="#2a323a"/>
+
+<!-- ============ 客厅 ============ -->
+<g id="room-living">
+  <rect x="26" y="26" width="384" height="598" fill="url(#livingWall)" class="room-bg"/>
+  <rect x="26" y="26" width="384" height="598" fill="url(#stoneFloor)" class="room-bg"/>
+  <text x="178" y="48" text-anchor="middle" font-size="15" font-weight="700" letter-spacing="2" fill="#5d4535">客 厅</text>
+
+  <!-- 窗户 -->
+  <rect x="150" y="22" width="140" height="5" rx="2" fill="rgba(69,170,242,.10)"/>
+  <rect x="22" y="160" width="5" height="150" rx="2" fill="rgba(69,170,242,.10)"/>
+  <line x1="150" y1="26" x2="290" y2="26" class="window-line"/><line x1="26" y1="160" x2="26" y2="310" class="window-line"/>
+  <line x1="150" y1="26" x2="290" y2="26" class="window-glow"/><line x1="26" y1="160" x2="26" y2="310" class="window-glow"/>
+
+  <!-- ==== 沙发 - 布艺细节 ==== -->
+  <g filter="url(#shadowWall)">
+    <!-- 底座阴影 -->
+    <rect x="44" y="146" width="260" height="8" rx="3" fill="rgba(0,0,0,.15)"/>
+    <!-- L形主体 -->
+    <path d="M48,88 L252,88 Q262,88 262,98 L262,142 Q262,152 252,152 L98,152 Q48,152 48,142 L48,98 Z" fill="#4a5668"/>
+    <path d="M48,88 L98,88 L98,200 L48,200 Q38,200 38,190 L38,98 Q38,88 48,88 Z" fill="#4a5668"/>
+    <!-- 扶手顶部 -->
+    <path d="M50,90 L250,90 Q260,90 260,98 L260,106 Q260,110 254,110 L50,110 Z" fill="#5c6a7e"/>
+    <path d="M50,90 L100,90 L100,198 Q100,204 94,204 L50,204 Z" fill="#5c6a7e"/>
+    <!-- 座垫 -->
+    <rect x="56" y="110" width="62" height="34" rx="5" fill="#6b7d94"/><rect x="56" y="114" width="62" height="26" rx="3" fill="#7183a0" opacity="0.4"/>
+    <rect x="124" y="110" width="62" height="34" rx="5" fill="#6b7d94"/><rect x="124" y="114" width="62" height="26" rx="3" fill="#7183a0" opacity="0.4"/>
+    <rect x="192" y="110" width="52" height="34" rx="5" fill="#6b7d94"/><rect x="192" y="114" width="52" height="26" rx="3" fill="#7183a0" opacity="0.4"/>
+    <rect x="56" y="150" width="38" height="42" rx="5" fill="#6b7d94"/>
+    <!-- 坐垫缝线 -->
+    <line x1="87" y1="112" x2="87" y2="142" stroke="#5a6a7e" stroke-width="0.4"/>
+    <line x1="155" y1="112" x2="155" y2="142" stroke="#5a6a7e" stroke-width="0.4"/>
+    <line x1="218" y1="112" x2="218" y2="142" stroke="#5a6a7e" stroke-width="0.4"/>
+    <!-- 靠背 -->
+    <rect x="56" y="94" width="196" height="18" rx="6" fill="#5c6a7e"/>
+    <rect x="56" y="96" width="196" height="12" rx="4" fill="#7080a0" opacity="0.25"/>
+    <!-- 抱枕 -->
+    <ellipse cx="72" cy="112" rx="9" ry="14" fill="#8b6f5a" opacity="0.8"/><ellipse cx="72" cy="110" rx="7" ry="10" fill="#9b7f6a" opacity="0.3"/>
+    <ellipse cx="143" cy="112" rx="9" ry="14" fill="#6b7d5a" opacity="0.8"/><ellipse cx="143" cy="110" rx="7" ry="10" fill="#7b8f6a" opacity="0.3"/>
+    <ellipse cx="228" cy="112" rx="9" ry="14" fill="#8b6f5a" opacity="0.8"/><ellipse cx="228" cy="110" rx="7" ry="10" fill="#9b7f6a" opacity="0.3"/>
+    <!-- 底座木脚 -->
+    <rect x="54" y="150" width="6" height="5" rx="1" fill="#5a4030"/><rect x="244" y="150" width="6" height="5" rx="1" fill="#5a4030"/>
+  </g>
+
+  <!-- 茶几 -->
+  <g filter="url(#shadowFloor)">
+    <!-- 桌面 -->
+    <rect x="96" y="210" width="124" height="52" rx="6" fill="#5a3a28"/>
+    <rect x="98" y="212" width="120" height="48" rx="4" fill="url(#surfaceTop)"/>
+    <rect x="98" y="212" width="120" height="48" rx="4" fill="#704830" opacity="0.7"/>
+    <!-- 木纹 -->
+    <path d="M102,222 Q160,218 218,224" fill="none" stroke="#604028" stroke-width="0.5"/><path d="M102,236 Q160,232 218,238" fill="none" stroke="#604028" stroke-width="0.5"/>
+    <path d="M102,248 Q160,246 218,250" fill="none" stroke="#604028" stroke-width="0.4"/>
+    <!-- 桌腿 -->
+    <rect x="100" y="258" width="5" height="6" rx="1" fill="#4a2a18"/><rect x="115" y="258" width="5" height="6" rx="1" fill="#4a2a18"/>
+    <rect x="196" y="258" width="5" height="6" rx="1" fill="#4a2a18"/><rect x="211" y="258" width="5" height="6" rx="1" fill="#4a2a18"/>
+  </g>
+
+  <!-- 电视柜 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="370" y="102" width="28" height="170" rx="4" fill="#333"/>
+    <rect x="372" y="104" width="24" height="166" rx="2" fill="#3d3d3d"/>
+    <!-- 电视 -->
+    <rect x="374" y="110" width="20" height="70" rx="2" fill="#1a1a1a"/>
+    <rect x="376" y="114" width="16" height="60" rx="1" fill="#111"/>
+    <rect x="378" y="117" width="10" height="26" rx="1" fill="rgba(69,170,242,.12)"/>
+    <!-- 柜门 -->
+    <rect x="374" y="186" width="20" height="40" rx="2" fill="#333"/><line x1="384" y1="188" x2="384" y2="224" stroke="#2a2a2a" stroke-width="0.5"/>
+    <rect x="374" y="230" width="20" height="36" rx="2" fill="#333"/>
+    <!-- 底座 -->
+    <rect x="368" y="270" width="32" height="4" rx="1" fill="#222"/>
+  </g>
+
+  <!-- 落地灯 -->
+  <line x1="54" y1="310" x2="54" y2="382" stroke="#5a5a5a" stroke-width="2.5"/>
+  <rect x="48" y="380" width="12" height="4" rx="2" fill="#4a4a4a"/>
+  <ellipse cx="54" cy="308" rx="10" ry="4" fill="#e8d8b0" opacity="0.7"/>
+  <path d="M44,308 L54,296 L64,308 Z" fill="#e8d8b0" opacity="0.6"/>
+  <circle cx="54" cy="300" r="14" fill="rgba(232,216,176,.06)"/>
+
+  <!-- 绿植 -->
+  <circle cx="402" cy="314" r="20" fill="rgba(90,160,90,.5)"/><circle cx="402" cy="314" r="13" fill="rgba(110,180,100,.55)"/><circle cx="402" cy="314" r="7" fill="rgba(130,200,110,.5)"/>
+  <rect x="397" y="332" width="10" height="14" rx="3" fill="#6b4a30"/><rect x="395" y="344" width="14" height="3" rx="1" fill="#5a4030"/>
+
+  <!-- 地毯 -->
+  <rect x="120" y="320" width="180" height="100" rx="4" fill="rgba(210,195,175,.1)"/>
+  <rect x="128" y="328" width="164" height="84" rx="2" fill="none" stroke="rgba(190,175,155,.06)" stroke-width="0.5"/>
+
+  <!-- 书架 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="346" y="276" width="46" height="96" rx="3" fill="#5a3a28"/>
+    <rect x="348" y="278" width="42" height="92" rx="2" fill="#6b4830"/>
+    <rect x="348" y="302" width="42" height="2" fill="#5a3a28"/><rect x="348" y="328" width="42" height="2" fill="#5a3a28"/><rect x="348" y="354" width="42" height="2" fill="#5a3a28"/>
+    <!-- 书 -->
+    <rect x="352" y="284" width="5" height="16" rx="1" fill="#c0392b"/><rect x="359" y="286" width="4" height="14" rx="1" fill="#2980b9"/>
+    <rect x="365" y="285" width="5" height="15" rx="1" fill="#8b7a30"/><rect x="352" y="308" width="12" height="16" rx="1" fill="#7f8c8d"/>
+  </g>
+
+  <!-- 传感器 -->
+  <circle cx="210" cy="445" r="4" fill="#fc5c65" class="sensor-dot"/>
+  <text x="210" y="462" text-anchor="middle" font-size="7" fill="#fc5c65">PIR</text>
+</g>
+
+<!-- 客厅→走廊门 -->
+<line x1="410" y1="330" x2="410" y2="430" class="door-line"/>
+<path d="M410,330 Q445,330 445,380" class="door-arc"/><path d="M410,430 Q445,430 445,380" class="door-arc"/>
+
+<!-- ============ 走廊 ============ -->
+<rect x="410" y="26" width="100" height="598" fill="url(#hallWall)" class="room-bg"/>
+<rect x="410" y="26" width="100" height="598" fill="url(#herringbone)" class="room-bg"/>
+<text x="460" y="48" text-anchor="middle" font-size="11" fill="#8d6e63" font-weight="600" letter-spacing="2">走廊</text>
+<circle cx="460" cy="130" r="7" fill="rgba(240,230,200,.2)"/><circle cx="460" cy="440" r="7" fill="rgba(240,230,200,.2)"/>
+<circle cx="460" cy="300" r="3.5" fill="#fc5c65" class="sensor-dot"/><circle cx="460" cy="510" r="3.5" fill="#fc5c65" class="sensor-dot"/>
+
+<!-- ============ 卧室 ============ -->
+<g id="room-bedroom">
+  <rect x="510" y="26" width="426" height="280" fill="url(#bedroomWall)" class="room-bg"/>
+  <rect x="510" y="26" width="426" height="280" fill="url(#widePlank)" class="room-bg"/>
+  <text x="696" y="48" text-anchor="middle" font-size="15" font-weight="700" letter-spacing="2" fill="#4a3080">卧 室</text>
+
+  <rect x="610" y="22" width="210" height="5" rx="2" fill="rgba(69,170,242,.10)"/>
+  <line x1="610" y1="26" x2="820" y2="26" class="window-line"/><line x1="610" y1="26" x2="820" y2="26" class="window-glow"/>
+  <path d="M624,38 Q630,76 624,112" fill="none" stroke="#c4b0d8" stroke-width="3" opacity="0.35"/>
+
+  <!-- ==== 床 - 真实布艺 ==== -->
+  <g filter="url(#shadowBed)">
+    <!-- 床架 -->
+    <rect x="684" y="82" width="152" height="178" rx="8" fill="#4a3020"/>
+    <!-- 床头板 -->
+    <rect x="684" y="76" width="152" height="18" rx="5" fill="#5a3a28"/>
+    <rect x="686" y="78" width="148" height="14" rx="4" fill="#6b4830"/>
+    <!-- 软包线条 -->
+    <line x1="698" y1="80" x2="698" y2="90" stroke="#4a3020" stroke-width="0.6"/><line x1="716" y1="80" x2="716" y2="90" stroke="#4a3020" stroke-width="0.6"/>
+    <line x1="734" y1="80" x2="734" y2="90" stroke="#4a3020" stroke-width="0.6"/><line x1="752" y1="80" x2="752" y2="90" stroke="#4a3020" stroke-width="0.6"/>
+    <line x1="770" y1="80" x2="770" y2="90" stroke="#4a3020" stroke-width="0.6"/><line x1="788" y1="80" x2="788" y2="90" stroke="#4a3020" stroke-width="0.6"/>
+    <line x1="806" y1="80" x2="806" y2="90" stroke="#4a3020" stroke-width="0.6"/><line x1="824" y1="80" x2="824" y2="90" stroke="#4a3020" stroke-width="0.6"/>
+    <!-- 床垫 -->
+    <rect x="692" y="98" width="136" height="18" rx="4" fill="#f5f0e8"/>
+    <!-- 被子 -->
+    <rect x="692" y="115" width="136" height="72" rx="6" fill="#e8e0f0"/>
+    <rect x="692" y="115" width="136" height="72" rx="6" fill="url(#lightTop)"/>
+    <!-- 被子折痕 -->
+    <path d="M696,130 Q760,126 824,132" fill="none" stroke="#d8d0e0" stroke-width="0.5"/>
+    <path d="M696,148 Q760,144 824,150" fill="none" stroke="#d8d0e0" stroke-width="0.5"/>
+    <path d="M696,166 Q760,162 824,168" fill="none" stroke="#d8d0e0" stroke-width="0.4"/>
+    <!-- 床单垂坠 -->
+    <rect x="692" y="188" width="136" height="64" rx="4" fill="#f0eaf5"/>
+    <!-- 枕头 -->
+    <ellipse cx="714" cy="112" rx="22" ry="12" fill="#fafafa"/>
+    <ellipse cx="786" cy="112" rx="22" ry="12" fill="#fafafa"/>
+    <ellipse cx="714" cy="110" rx="17" ry="7" fill="#fff"/>
+    <ellipse cx="786" cy="110" rx="17" ry="7" fill="#fff"/>
+  </g>
+
+  <!-- 床头柜 L -->
+  <g filter="url(#shadowFloor)">
+    <rect x="642" y="134" width="34" height="40" rx="4" fill="#4a3020"/>
+    <rect x="644" y="136" width="30" height="36" rx="2" fill="#5a3a28"/>
+    <!-- 台灯 -->
+    <rect x="654" y="116" width="6" height="20" rx="2" fill="#5a5a5a"/>
+    <ellipse cx="657" cy="114" rx="8" ry="3" fill="#e8d8b0" opacity="0.7"/>
+    <path d="M649,114 L657,104 L665,114 Z" fill="#e8d8b0" opacity="0.5"/>
+  </g>
+
+  <!-- 床头柜 R -->
+  <g filter="url(#shadowFloor)">
+    <rect x="836" y="134" width="34" height="40" rx="4" fill="#4a3020"/>
+    <rect x="838" y="136" width="30" height="36" rx="2" fill="#5a3a28"/>
+    <rect x="850" y="124" width="8" height="10" rx="3" fill="rgba(150,210,240,.5)"/>
+    <ellipse cx="854" cy="126" rx="4" ry="2" fill="#fff" opacity="0.5"/>
+  </g>
+
+  <!-- 衣柜 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="524" y="82" width="128" height="58" rx="5" fill="#f0ede6"/>
+    <rect x="526" y="84" width="60" height="54" rx="3" fill="#faf8f5"/><rect x="590" y="84" width="60" height="54" rx="3" fill="#faf8f5"/>
+    <line x1="588" y1="84" x2="588" y2="138" stroke="#e8e0d0" stroke-width="1.2"/>
+    <rect x="574" y="105" width="3" height="14" rx="1" fill="#8a8070"/><rect x="608" y="105" width="3" height="14" rx="1" fill="#8a8070"/>
+  </g>
+
+  <ellipse cx="620" cy="280" rx="52" ry="18" fill="rgba(180,165,145,.1)"/>
+  <circle cx="554" cy="240" r="4" fill="#fc5c65" class="sensor-dot"/>
+  <text x="554" y="254" text-anchor="middle" font-size="7" fill="#fc5c65">PIR</text>
+</g>
+<line x1="510" y1="170" x2="510" y2="260" class="door-line"/><path d="M510,260 Q470,260 470,215" class="door-arc"/>
+
+<!-- ============ 卫生间 ============ -->
+<g id="room-bathroom">
+  <rect x="510" y="306" width="204" height="166" fill="url(#bathWall)" class="room-bg"/>
+  <rect x="510" y="306" width="204" height="166" fill="url(#marble)" class="room-bg"/>
+  <text x="612" y="326" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#3a6a64">卫生间</text>
+
+  <!-- 马桶 -->
+  <g filter="url(#shadowFloor)">
+    <ellipse cx="694" cy="430" rx="22" ry="26" fill="#f8f8f8"/>
+    <ellipse cx="694" cy="412" rx="19" ry="14" fill="#fafafa" stroke="#e8e8e8" stroke-width="0.6"/>
+    <ellipse cx="694" cy="416" rx="11" ry="7" fill="#f5f5f5"/>
+    <rect x="674" y="386" width="40" height="18" rx="4" fill="#f5f5f5" stroke="#e8e8e8" stroke-width="0.6"/>
+    <rect x="682" y="390" width="24" height="10" rx="2" fill="#fafafa"/>
+    <circle cx="694" cy="390" r="2" fill="#888"/>
+  </g>
+
+  <!-- 浴室柜 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="520" y="396" width="100" height="46" rx="5" fill="#5a5a5a"/>
+    <rect x="522" y="398" width="96" height="42" rx="3" fill="#6a6a6a"/>
+    <rect x="524" y="400" width="44" height="38" rx="2" fill="#7a7a7a"/><rect x="572" y="400" width="44" height="38" rx="2" fill="#7a7a7a"/>
+    <rect x="564" y="414" width="4" height="10" rx="1" fill="#555"/>
+    <!-- 台面 -->
+    <rect x="518" y="393" width="104" height="5" rx="2" fill="#d4c8b8"/>
+    <!-- 台上盆 -->
+    <ellipse cx="570" cy="398" rx="12" ry="8" fill="#eee" stroke="#d0d0d0" stroke-width="0.8"/>
+    <ellipse cx="570" cy="396" rx="8" ry="4" fill="#f8f8f8"/>
+    <!-- 龙头 -->
+    <rect x="566" y="388" width="8" height="6" rx="2" fill="#808080"/>
+    <!-- 镜子 -->
+    <rect x="536" y="358" width="68" height="28" rx="5" fill="#e8e8e8" stroke="#d0d0d0" stroke-width="0.6"/>
+    <ellipse cx="570" cy="372" rx="22" ry="8" fill="rgba(200,200,200,.3)"/>
+  </g>
+
+  <!-- 淋浴 -->
+  <rect x="520" y="450" width="92" height="18" rx="4" stroke="#969696" stroke-width="1" stroke-dasharray="4 3" fill="none"/>
+  <rect x="522" y="452" width="88" height="14" rx="3" fill="rgba(160,200,210,.15)"/>
+  <circle cx="566" cy="450" r="4" fill="#606060"/><circle cx="566" cy="450" r="2" fill="#808080"/>
+  <text x="566" y="474" text-anchor="middle" font-size="8" fill="#8d8d8d">淋浴</text>
+  <circle cx="618" cy="462" r="3.5" fill="#fc5c65" class="sensor-dot"/>
+</g>
+<line x1="510" y1="346" x2="510" y2="422" class="door-line"/><path d="M510,422 Q470,422 470,384" class="door-arc"/>
+
+<!-- ============ 厨房 ============ -->
+<g id="room-kitchen">
+  <rect x="714" y="306" width="222" height="318" fill="url(#kitchenWall)" class="room-bg"/>
+  <rect x="714" y="306" width="222" height="318" fill="url(#stoneFloor)" opacity="0.6" class="room-bg"/>
+  <text x="811" y="326" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#3a5a2e">厨 房</text>
+
+  <rect x="760" y="620" width="130" height="5" rx="2" fill="rgba(69,170,242,.10)"/>
+  <line x1="760" y1="624" x2="890" y2="624" class="window-line"/><line x1="760" y1="624" x2="890" y2="624" class="window-glow"/>
+
+  <!-- L型橱柜 -->
+  <g filter="url(#shadowFloor)">
+    <!-- 地柜 -->
+    <rect x="716" y="408" width="216" height="50" rx="4" fill="#4a5668"/>
+    <rect x="716" y="462" width="54" height="154" rx="4" fill="#4a5668"/>
+    <!-- 柜门 -->
+    <rect x="720" y="412" width="50" height="42" rx="2" fill="#546074"/><rect x="774" y="412" width="50" height="42" rx="2" fill="#546074"/>
+    <rect x="828" y="412" width="50" height="42" rx="2" fill="#546074"/><rect x="882" y="412" width="46" height="42" rx="2" fill="#546074"/>
+    <rect x="720" y="468" width="46" height="48" rx="2" fill="#546074"/><rect x="720" y="520" width="46" height="48" rx="2" fill="#546074"/><rect x="720" y="572" width="46" height="40" rx="2" fill="#546074"/>
+    <!-- 把手 -->
+    <rect x="740" y="428" width="16" height="3" rx="1" fill="#888"/><rect x="794" y="428" width="16" height="3" rx="1" fill="#888"/>
+    <rect x="848" y="428" width="16" height="3" rx="1" fill="#888"/><rect x="896" y="428" width="16" height="3" rx="1" fill="#888"/>
+    <rect x="724" y="490" width="3" height="16" rx="1" fill="#888"/><rect x="724" y="542" width="3" height="16" rx="1" fill="#888"/>
+    <!-- 台面 -->
+    <rect x="714" y="404" width="220" height="6" rx="2" fill="#d4c5b2"/>
+    <rect x="714" y="458" width="58" height="6" rx="2" fill="#d4c5b2"/>
+    <!-- 台面纹理 -->
+    <path d="M718,406 Q780,403 880,407" fill="none" stroke="#c4b5a2" stroke-width="0.3"/>
+  </g>
+
+  <!-- 嵌入式灶台 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="728" y="416" width="64" height="38" rx="4" fill="#1a1a1a"/>
+    <!-- 炉头 -->
+    <circle cx="748" cy="434" r="10" fill="#222"/><circle cx="748" cy="434" r="6" fill="#111"/>
+    <circle cx="748" cy="434" r="3" fill="rgba(255,100,50,.5)"/>
+    <circle cx="786" cy="434" r="10" fill="#222"/><circle cx="786" cy="434" r="6" fill="#111"/>
+    <circle cx="786" cy="434" r="3" fill="rgba(255,100,50,.5)"/>
+    <!-- 旋钮 -->
+    <circle cx="743" cy="448" r="3" fill="#777"/><circle cx="783" cy="448" r="3" fill="#777"/>
+  </g>
+
+  <!-- 蒸汽 -->
+  <ellipse cx="770" cy="410" rx="6" ry="2.5" fill="#fff" opacity="0" class="steam" style="animation-delay:0s"/>
+  <ellipse cx="765" cy="406" rx="4" ry="1.8" fill="#fff" opacity="0" class="steam" style="animation-delay:.8s"/>
+  <ellipse cx="775" cy="404" rx="3.5" ry="1.5" fill="#fff" opacity="0" class="steam" style="animation-delay:1.6s"/>
+
+  <!-- 水槽 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="834" y="416" width="62" height="38" rx="4" fill="#888"/>
+    <rect x="838" y="420" width="24" height="30" rx="3" fill="#b8b8b8"/><rect x="866" y="420" width="24" height="30" rx="3" fill="#b8b8b8"/>
+    <rect x="862" y="410" width="6" height="8" rx="2" fill="#666"/>
+    <path d="M862,410 Q865,404 868,410" fill="none" stroke="#666" stroke-width="1.2"/>
+  </g>
+
+  <!-- 冰箱 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="850" y="478" width="50" height="54" rx="5" fill="#c0c8d0"/>
+    <rect x="853" y="482" width="44" height="24" rx="3" fill="#d8dce4"/><rect x="853" y="510" width="44" height="18" rx="3" fill="#a8b0b8"/>
+    <rect x="890" y="488" width="4" height="12" rx="2" fill="#9098a0"/><rect x="890" y="515" width="4" height="8" rx="2" fill="#9098a0"/>
+  </g>
+
+  <!-- 小餐桌 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="766" y="540" width="90" height="56" rx="5" fill="#4a3020"/>
+    <rect x="768" y="542" width="86" height="52" rx="3" fill="#5a3a28"/>
+    <rect x="756" y="554" width="14" height="24" rx="3" fill="#3a2010"/><rect x="850" y="554" width="14" height="24" rx="3" fill="#3a2010"/>
+  </g>
+
+  <circle cx="822" cy="384" r="4" fill="#fc5c65" class="sensor-dot"/>
+  <text x="822" y="400" text-anchor="middle" font-size="7" fill="#fc5c65">烟雾</text>
+</g>
+<line x1="714" y1="376" x2="714" y2="458" class="door-line"/><path d="M714,376 Q734,376 734,417" class="door-arc"/><path d="M714,458 Q734,458 734,417" class="door-arc"/>
+
+<!-- ============ 餐厅 ============ -->
+<g id="room-dining">
+  <rect x="26" y="460" width="342" height="166" fill="url(#livingWall)" class="room-bg"/>
+  <rect x="26" y="460" width="342" height="166" fill="url(#stoneFloor)" opacity="0.7" class="room-bg"/>
+  <!-- 半隔断 -->
+  <rect x="26" y="458" width="342" height="4" rx="2" fill="#c4b5a5"/>
+  <text x="178" y="482" text-anchor="middle" font-size="15" font-weight="700" letter-spacing="2" fill="#8a3020">餐 厅</text>
+
+  <rect x="150" y="622" width="120" height="5" rx="2" fill="rgba(69,170,242,.10)"/>
+  <line x1="150" y1="626" x2="270" y2="626" class="window-line"/><line x1="150" y1="626" x2="270" y2="626" class="window-glow"/>
+
+  <!-- 餐桌 - 俯视图 -->
+  <g filter="url(#shadowFloor)">
+    <!-- 桌面阴影 -->
+    <ellipse cx="194" cy="528" rx="78" ry="36" fill="rgba(0,0,0,.12)"/>
+    <!-- 桌面 -->
+    <ellipse cx="194" cy="526" rx="78" ry="36" fill="#6d4c41"/>
+    <ellipse cx="194" cy="526" rx="74" ry="33" fill="#7d5a4a"/>
+    <!-- 木纹 -->
+    <ellipse cx="194" cy="526" rx="56" ry="24" fill="none" stroke="#6d4c41" stroke-width="0.4"/>
+    <ellipse cx="194" cy="526" rx="38" ry="16" fill="none" stroke="#6d4c41" stroke-width="0.3"/>
+    <ellipse cx="194" cy="526" rx="20" ry="8" fill="none" stroke="#6d4c41" stroke-width="0.3"/>
+  </g>
+
+  <!-- 餐椅 - 俯视图 (6把) -->
+  <g filter="url(#shadowFloor)">
+    <!-- 左侧上 -->
+    <rect x="104" y="500" width="20" height="28" rx="4" fill="#5d4037"/>
+    <rect x="106" y="502" width="16" height="22" rx="3" fill="#6d4c41"/>
+    <!-- 左侧下 -->
+    <rect x="104" y="544" width="20" height="28" rx="4" fill="#5d4037"/>
+    <rect x="106" y="546" width="16" height="22" rx="3" fill="#6d4c41"/>
+    <!-- 右侧上 -->
+    <rect x="264" y="500" width="20" height="28" rx="4" fill="#5d4037"/>
+    <rect x="266" y="502" width="16" height="22" rx="3" fill="#6d4c41"/>
+    <!-- 右侧下 -->
+    <rect x="264" y="544" width="20" height="28" rx="4" fill="#5d4037"/>
+    <rect x="266" y="546" width="16" height="22" rx="3" fill="#6d4c41"/>
+    <!-- 上方 -->
+    <rect x="176" y="484" width="28" height="20" rx="4" fill="#5d4037"/>
+    <rect x="178" y="486" width="24" height="16" rx="3" fill="#6d4c41"/>
+    <!-- 下方 -->
+    <rect x="176" y="568" width="28" height="20" rx="4" fill="#5d4037"/>
+    <rect x="178" y="570" width="24" height="16" rx="3" fill="#6d4c41"/>
+  </g>
+
+  <!-- 吊灯 - 俯视图 -->
+  <circle cx="194" cy="500" r="10" fill="rgba(220,200,160,.15)"/>
+  <circle cx="194" cy="500" r="5" fill="rgba(220,200,160,.3)"/>
+  <circle cx="194" cy="500" r="2" fill="rgba(240,230,200,.5)"/>
+
+  <!-- 餐边柜 -->
+  <g filter="url(#shadowFloor)">
+    <rect x="34" y="558" width="70" height="54" rx="5" fill="#f0ede6"/>
+    <rect x="36" y="560" width="66" height="50" rx="3" fill="#faf8f5"/>
+    <line x1="68" y1="560" x2="68" y2="610" stroke="#e0d8cc" stroke-width="0.8"/>
+    <rect x="52" y="578" width="3" height="14" rx="1" fill="#8a8070"/><rect x="82" y="578" width="3" height="14" rx="1" fill="#8a8070"/>
+  </g>
+
+  <circle cx="318" cy="578" r="16" fill="rgba(90,160,90,.4)"/><circle cx="318" cy="578" r="10" fill="rgba(110,180,100,.5)"/>
+  <rect x="315" y="592" width="6" height="12" rx="2" fill="#5a4030"/>
+</g>
+
+<!-- 入户门 -->
+<line x1="58" y1="626" x2="138" y2="626" class="door-line" stroke-width="2.5"/>
+<path d="M58,626 Q58,590 98,590" class="door-arc"/>
+<text x="88" y="616" text-anchor="middle" font-size="8" fill="#b8963e" font-weight="600">入户门</text>
+
+<!-- 热力图 -->
+<g id="heatmap-overlays" class="hm-overlay" opacity="0">
+  <rect id="hm-living" x="26" y="26" width="384" height="598" rx="3" fill="rgba(69,170,242,.3)" pointer-events="none"/>
+  <rect id="hm-bedroom" x="510" y="26" width="426" height="280" rx="3" fill="rgba(69,170,242,.7)" pointer-events="none"/>
+  <rect id="hm-bathroom" x="510" y="306" width="204" height="166" rx="3" fill="rgba(69,170,242,.12)" pointer-events="none"/>
+  <rect id="hm-kitchen" x="714" y="306" width="222" height="318" rx="3" fill="rgba(69,170,242,.22)" pointer-events="none"/>
+  <rect id="hm-dining" x="26" y="460" width="342" height="166" rx="3" fill="rgba(69,170,242,.12)" pointer-events="none"/>
+</g>
+
+<!-- 房间高亮 -->
+<rect id="hl-living" x="26" y="26" width="384" height="598" rx="3" fill="rgba(69,170,242,.06)" opacity="0" pointer-events="none"/>
+<rect id="hl-dining" x="26" y="460" width="342" height="166" rx="3" fill="rgba(69,170,242,.06)" opacity="0" pointer-events="none"/>
+<rect id="hl-bedroom" x="510" y="26" width="426" height="280" rx="3" fill="rgba(69,170,242,.06)" opacity="0" pointer-events="none"/>
+<rect id="hl-bathroom" x="510" y="306" width="204" height="166" rx="3" fill="rgba(69,170,242,.06)" opacity="0" pointer-events="none"/>
+<rect id="hl-kitchen" x="714" y="306" width="222" height="318" rx="3" fill="rgba(69,170,242,.06)" opacity="0" pointer-events="none"/>
+
+<!-- 老人 -->
+<g id="elder-group" class="elder-group" transform="translate(190,260)">
+  <circle cx="0" cy="0" r="22" fill="rgba(69,170,242,.2)" opacity="0" class="elder-glow-el"/>
+  <ellipse cx="0" cy="16" rx="11" ry="3" fill="rgba(0,0,0,.18)"/>
+  <circle cx="0" cy="0" r="14" fill="#45aaf2" stroke="#fff" stroke-width="2.5"/>
+  <ellipse cx="-4" cy="-4" rx="4" ry="3" fill="rgba(255,255,255,.35)"/>
+  <circle cx="-5" cy="-2" r="2" fill="#fff"/><circle cx="4" cy="-2" r="2" fill="#fff"/>
+  <circle cx="-4.5" cy="-2.5" r="0.8" fill="#1e272e"/><circle cx="4.5" cy="-2.5" r="0.8" fill="#1e272e"/>
+  <path d="M-4,6 Q0,10 4,6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  <polygon points="0,-20 -7,-10 7,-10" fill="#ff7043"/>
+  <rect x="-22" y="22" width="44" height="14" rx="7" fill="rgba(0,0,0,.6)"/>
+  <text x="0" y="33" text-anchor="middle" font-size="10" fill="#fff" font-weight="600">张爷爷</text>
+</g>
+
+<!-- 点击热区 -->
+<rect x="26" y="26" width="384" height="434" fill="transparent" class="clickable-room" onclick="clickRoom('客厅',190,260)"/>
+<rect x="26" y="460" width="342" height="166" fill="transparent" class="clickable-room" onclick="clickRoom('餐厅',194,540)"/>
+<rect x="510" y="26" width="426" height="280" fill="transparent" class="clickable-room" onclick="clickRoom('卧室',656,190)"/>
+<rect x="510" y="306" width="204" height="166" fill="transparent" class="clickable-room" onclick="clickRoom('卫生间',614,410)"/>
+<rect x="714" y="306" width="222" height="318" fill="transparent" class="clickable-room" onclick="clickRoom('厨房',830,500)"/>
+</svg>
+      </div>
+    </div>
+
+    <div class="status-strip">
+      <span class="label">当前位置</span><span id="loc-text" class="value highlight">客厅</span><span class="sep"></span>
+      <span class="label">活动状态</span><span id="act-text" class="value">坐</span><span class="sep"></span>
+      <span class="label">本次停留</span><span id="stay-text" class="value">8 分钟</span><span class="sep"></span>
+      <span class="label">今日活动</span><span class="value">客厅 2.4h · 卧室 7.8h · 厨房 1.3h</span>
+    </div>
+
+    <div class="bottom-panels">
+      <div class="panel" style="flex:1;min-width:0"><div class="panel-title">11 维健康评估</div><div class="dims" id="dims-grid"></div></div>
+      <div class="panel" style="flex:1;min-width:0"><div class="panel-title">近期活动</div><div class="timeline" id="timeline"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const roomData={'客厅':{x:190,y:260,hl:'hl-living',status:'坐',vitals:{hr:72,spo2:97,bpS:128,bpD:82,temp:36.5},risk:'stable',stay:8},'餐厅':{x:194,y:540,hl:'hl-dining',status:'坐',vitals:{hr:78,spo2:96,bpS:130,bpD:84,temp:36.6},risk:'stable',stay:25},'卧室':{x:656,y:190,hl:'hl-bedroom',status:'躺',vitals:{hr:65,spo2:98,bpS:122,bpD:78,temp:36.3},risk:'stable',stay:95},'卫生间':{x:614,y:410,hl:'hl-bathroom',status:'行走',vitals:{hr:82,spo2:95,bpS:135,bpD:85,temp:36.5},risk:'watch',stay:3},'厨房':{x:830,y:500,hl:'hl-kitchen',status:'行走',vitals:{hr:85,spo2:95,bpS:132,bpD:85,temp:36.7},risk:'watch',stay:45}}
+const ds={activity:{walk:1.5,sit:3.8,lie:7.0},rooms:{living:2.4,bedroom:7.8,kitchen:1.3,dining:0.9,bathroom:0.3}}
+const dims=[{key:'heart_rate',label:'心率',unit:'bpm',good:[60,100],val:72},{key:'spo2',label:'血氧',unit:'%',good:[95,100],val:97},{key:'temperature',label:'体温',unit:'°C',good:[36,37.2],val:36.5},{key:'systolic_bp',label:'收缩压',unit:'mmHg',good:[90,140],val:128},{key:'diastolic_bp',label:'舒张压',unit:'mmHg',good:[60,90],val:82},{key:'glucose',label:'血糖',unit:'mmol',good:[3.9,6.1],val:5.4},{key:'motion_index',label:'运动指数',unit:'idx',good:[20,80],val:45},{key:'posture',label:'姿态',unit:'',good:[0,1],val:'正常'},{key:'night_wandering',label:'夜间游走',unit:'次',good:[0,1],val:0},{key:'repetitive_behavior',label:'重复行为',unit:'次',good:[0,2],val:0},{key:'wandering_risk',label:'游走风险',unit:'级',good:[0,1],val:0}]
+const rm={stable:{l:'稳定',c:'#20bf6b',d:95},watch:{l:'关注',c:'#f7b731',d:200},alert:{l:'预警',c:'#fd9644',d:290},emergency:{l:'紧急',c:'#fc5c65',d:340}}
+let cr='客厅',tx,ty,cx,cy,af,hm=false
+
+function init(){const t=elderG.transform.baseVal;if(t.length>0){cx=t.getItem(0).matrix.e;cy=t.getItem(0).matrix.f}else{cx=roomData['客厅'].x;cy=roomData['客厅'].y}tx=cx;ty=cy;rd(dims);rt();up(roomData['客厅']);hr('客厅');rds();sc()}
+function rd(d){document.getElementById('dims-grid').innerHTML=d.map(d=>{const n=typeof d.val==='number'?d.val:(d.val==='正常'?0:1);const o=d.good[0]<=n&&n<=d.good[1];const cl=o?'good':(n>d.good[1]*1.5?'warn':'attn');const v=typeof d.val==='number'?`${d.val}${d.unit}`:d.val;return `<div class="dim-item"><span class="dim-dot ${cl}"></span><span class="dim-label">${d.label}</span><span class="dim-val">${v}</span></div>`}).join('')}
+function rt(){const i=[{t:'10:25',r:'厨房',d:'45min',c:cr==='厨房'},{t:'10:10',r:'客厅',d:'15min',c:cr==='客厅'},{t:'08:30',r:'餐厅',d:'25min',c:cr==='餐厅'},{t:'08:00',r:'卧室',d:'30min',c:cr==='卧室'},{t:'22:00',r:'卧室',d:'10h',c:false}];document.getElementById('timeline').innerHTML=i.map(i=>`<div class="timeline-item${i.c?' current':''}"><span class="tl-dot"></span><span class="tl-time">${i.t}</span><span class="tl-room">${i.r}</span><span class="tl-dur">${i.d}</span></div>`).join('')}
+function up(d){document.getElementById('loc-text').textContent=cr;document.getElementById('act-text').textContent=d.status;document.getElementById('stay-text').textContent=`${d.stay} 分钟`;document.getElementById('elder-room-dur').textContent=`停留 ${d.stay}min`;document.getElementById('vital-hr').textContent=Math.round(d.vitals.hr);document.getElementById('vital-spo2').textContent=Math.round(d.vitals.spo2);document.getElementById('vital-bp').textContent=`${d.vitals.bpS}/${d.vitals.bpD}`;document.getElementById('vital-temp').textContent=d.vitals.temp.toFixed(1);const r=rm[d.risk];document.getElementById('risk-level').textContent=r.l;document.getElementById('risk-level').style.color=r.c;document.getElementById('risk-ring').style.background=`conic-gradient(${r.c} 0deg ${r.d}deg, rgba(255,255,255,.06) ${r.d}deg 360deg)`}
+function rds(){const ma=Math.max(ds.activity.walk,ds.activity.sit,ds.activity.lie);const mr=Math.max(...Object.values(ds.rooms));document.getElementById('bar-walk').style.width=(ds.activity.walk/ma*92)+'%';document.getElementById('val-walk').textContent=ds.activity.walk.toFixed(1)+' h';document.getElementById('bar-sit').style.width=(ds.activity.sit/ma*92)+'%';document.getElementById('val-sit').textContent=ds.activity.sit.toFixed(1)+' h';document.getElementById('bar-lie').style.width=(ds.activity.lie/ma*92)+'%';document.getElementById('val-lie').textContent=ds.activity.lie.toFixed(1)+' h';document.getElementById('bar-living').style.width=(ds.rooms.living/mr*92)+'%';document.getElementById('val-living').textContent=ds.rooms.living.toFixed(1)+' h';document.getElementById('bar-bedroom').style.width=(ds.rooms.bedroom/mr*92)+'%';document.getElementById('val-bedroom').textContent=ds.rooms.bedroom.toFixed(1)+' h';document.getElementById('bar-kitchen').style.width=(ds.rooms.kitchen/mr*92)+'%';document.getElementById('val-kitchen').textContent=ds.rooms.kitchen.toFixed(1)+' h';document.getElementById('bar-dining').style.width=(ds.rooms.dining/mr*92)+'%';document.getElementById('val-dining').textContent=ds.rooms.dining.toFixed(1)+' h';document.getElementById('bar-bathroom').style.width=(ds.rooms.bathroom/mr*92)+'%';document.getElementById('val-bathroom').textContent=ds.rooms.bathroom.toFixed(1)+' h';const o=(v,x)=>v/x<.1?.10:v/x<.3?.18:v/x<.5?.3:v/x<.7?.5:.7;document.getElementById('hm-living').setAttribute('fill',`rgba(69,170,242,${o(ds.rooms.living,mr)})`);document.getElementById('hm-bedroom').setAttribute('fill',`rgba(69,170,242,${o(ds.rooms.bedroom,mr)})`);document.getElementById('hm-kitchen').setAttribute('fill',`rgba(69,170,242,${o(ds.rooms.kitchen,mr)})`);document.getElementById('hm-dining').setAttribute('fill',`rgba(69,170,242,${o(ds.rooms.dining,mr)})`);document.getElementById('hm-bathroom').setAttribute('fill',`rgba(69,170,242,${o(ds.rooms.bathroom,mr)})`)}
+function toggleHeatmap(){hm=!hm;document.getElementById('heatmap-overlays').setAttribute('opacity',hm?'1':'0');document.querySelectorAll('.room-bg').forEach(r=>r.style.opacity=hm?'0':'');const b=document.getElementById('btn-heatmap');b.classList.toggle('active',hm);b.textContent=hm?'热力图 ✓':'热力图';st(hm?'热力图已开启 — 颜色越深停留越久':'热力图已关闭')}
+function hr(room){Object.values(roomData).forEach(r=>{const e=document.getElementById(r.hl);if(e)e.setAttribute('opacity','0')});const h=document.getElementById(roomData[room].hl);if(h){h.setAttribute('opacity','1');setTimeout(()=>h.setAttribute('opacity','0'),2500)}}
+function clickRoom(room,x,y){cr=room;me(x,y);const d=roomData[room];up(d);hr(room);rt();st(`📍 ${room} — ${d.status}`);ds.rooms[room==='客厅'?'living':room==='餐厅'?'dining':room==='卧室'?'bedroom':room==='卫生间'?'bathroom':'kitchen']+=.05;rds()}
+function me(x,y){tx=x;ty=y;if(!af)as()}
+function as(){const t=elderG.transform.baseVal;if(t.length===0){elderG.setAttribute('transform',`translate(${tx},${ty})`);af=null;return}cx=t.getItem(0).matrix.e;cy=t.getItem(0).matrix.f;const dx=tx-cx,dy=ty-cy,dist=Math.sqrt(dx*dx+dy*dy);if(dist<1){elderG.setAttribute('transform',`translate(${tx},${ty})`);af=null;return}const s=7;elderG.setAttribute('transform',`translate(${cx+dx/dist*Math.min(s,dist)},${cy+dy/dist*Math.min(s,dist)})`);af=requestAnimationFrame(as)}
+function st(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2000)}
+function sc(){const e=document.getElementById('clock');const t=()=>{e.textContent=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};t();setInterval(t,1000)}
+function ip(){const c=document.getElementById('particles'),ctx=c.getContext('2d');const rs=()=>{c.width=window.innerWidth;c.height=window.innerHeight};rs();window.addEventListener('resize',rs);const pts=Array.from({length:60},()=>({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.5+.5,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,o:Math.random()*.4+.1}));function dr(){ctx.clearRect(0,0,c.width,c.height);pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=c.width;if(p.x>c.width)p.x=0;if(p.y<0)p.y=c.height;if(p.y>c.height)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(69,170,242,${p.o})`;ctx.fill()});requestAnimationFrame(dr)}dr()}
+const elderG=document.getElementById('elder-group');init();ip()
+setInterval(()=>{const d=roomData[cr];d.vitals.hr=Math.round(Math.max(55,Math.min(100,d.vitals.hr+(Math.random()-.5)*3)));d.vitals.spo2=Math.round(Math.max(93,Math.min(100,d.vitals.spo2+(Math.random()-.5)*.5)));d.vitals.temp=+(d.vitals.temp+(Math.random()-.5)*.03).toFixed(1);document.getElementById('vital-hr').textContent=d.vitals.hr;document.getElementById('vital-spo2').textContent=d.vitals.spo2;document.getElementById('vital-temp').textContent=d.vitals.temp.toFixed(1);dims[0].val=d.vitals.hr;dims[1].val=d.vitals.spo2;dims[2].val=d.vitals.temp;rd(dims)},3000)
+setInterval(()=>{const d=roomData[cr];d.stay++;document.getElementById('stay-text').textContent=`${d.stay} 分钟`;document.getElementById('elder-room-dur').textContent=`停留 ${d.stay}min`},60000)
+</script>
+</body>
+</html>

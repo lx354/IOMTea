@@ -772,6 +772,90 @@
         }
       }
     },
+    "/dashboard/daily-assessment/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily health assessment"
+          }
+        }
+      }
+    },
+    "/dashboard/device-status": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Device status list"
+          }
+        }
+      }
+    },
+    "/dashboard/device/:pin": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Device detail with history"
+          }
+        }
+      }
+    },
+    "/dashboard/predictive-alerts/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Predictive alerts"
+          }
+        }
+      }
+    },
+    "/dashboard/health-trends/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Health trend data"
+          }
+        }
+      }
+    },
+    "/dashboard/abnormal-events/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Abnormal events with detail"
+          }
+        }
+      }
+    },
+    "/dashboard/cognitive-prediction/:patientId": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cognitive prediction report"
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": [

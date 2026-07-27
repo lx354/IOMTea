@@ -31,6 +31,6 @@
     1,
     34
   ],
-  "accuracy": 0.851,
+  "accuracy": 0.8967,
   "model": "ResMLP"
 }

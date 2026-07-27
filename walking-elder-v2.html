@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高龄老人行走动画</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; background: #1a1a2e;
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    overflow: hidden;
+  }
+  .scene {
+    position: relative; width: 900px; height: 500px;
+    background: linear-gradient(180deg, #7ec8e3 0%, #b4dff0 25%, #c8e6c9 25%, #66bb6a 100%);
+    border-radius: 20px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,.3);
+  }
+  /* sky */
+  .sky { position: absolute; inset: 0 0 65% 0; }
+  .sun {
+    position: absolute; top: 30px; right: 70px;
+    width: 55px; height: 55px; background: radial-gradient(circle, #fff9c4, #ffd54f);
+    border-radius: 50%; box-shadow: 0 0 60px rgba(255,213,79,.5), 0 0 120px rgba(255,213,79,.15);
+  }
+  .cloud {
+    position: absolute; background: #fff; border-radius: 50%; opacity: .85;
+  }
+  .cloud::before, .cloud::after { content: ''; position: absolute; background: inherit; border-radius: 50%; }
+  .cloud.c1 { width: 80px; height: 32px; top: 35px; left: 500px; animation: drift 45s linear infinite; }
+  .cloud.c1::before { width: 40px; height: 40px; top: -20px; left: 14px; }
+  .cloud.c1::after  { width: 50px; height: 45px; top: -24px; left: 34px; }
+  .cloud.c2 { width: 65px; height: 26px; top: 55px; left: 180px; animation: drift 55s linear infinite 10s; }
+  .cloud.c2::before { width: 32px; height: 32px; top: -16px; left: 10px; }
+  .cloud.c2::after  { width: 40px; height: 36px; top: -18px; left: 26px; }
+  .cloud.c3 { width: 55px; height: 22px; top: 28px; left: 720px; animation: drift 38s linear infinite 20s; }
+  .cloud.c3::before { width: 26px; height: 26px; top: -12px; left: 8px; }
+  .cloud.c3::after  { width: 34px; height: 30px; top: -14px; left: 22px; }
+  @keyframes drift { to { transform: translateX(-1100px); } }
+
+  /* ground */
+  .ground { position: absolute; bottom: 0; width: 100%; height: 175px; }
+  .grass-layer {
+    position: absolute; bottom: 165px; width: 100%; height: 18px;
+    background: repeating-linear-gradient(90deg,
+      transparent 0px, #5da04e 4px, transparent 4px, transparent 10px,
+      transparent 10px, #4a8a3c 14px, transparent 14px, transparent 20px
+    );
+  }
+  .path {
+    position: absolute; bottom: 12px; left: 0; width: 200%; height: 78px;
+    background:
+      repeating-linear-gradient(90deg, #c9a87c 0px, #c9a87c 28px, #b8956a 28px, #b8956a 56px),
+      linear-gradient(to bottom, #d4b896 0%, #c4a47a 100%);
+    border-radius: 4px; animation: scrollPath 4s linear infinite;
+  }
+  .path::after {
+    content: ''; position: absolute; top: 2px; left: 0; width: 100%; height: 1px;
+    background: repeating-linear-gradient(90deg, transparent 0px, transparent 28px, rgba(255,255,255,.08) 28px, rgba(255,255,255,.08) 56px);
+  }
+  .path-edge {
+    position: absolute; bottom: 12px; left: 0; width: 200%; height: 3px;
+    background: #8b7355; animation: scrollPath 4s linear infinite;
+  }
+  @keyframes scrollPath { to { transform: translateX(-50%); } }
+
+  /* trees */
+  .tree { position: absolute; bottom: 138px; z-index: 2; }
+  .tree .trunk { width: 10px; height: 55px; background: linear-gradient(to right, #795548, #8d6e63); margin: 0 auto; border-radius: 3px; }
+  .tree .canopy {
+    width: 56px; height: 56px; background: radial-gradient(circle, #5da04e, #388e3c);
+    border-radius: 50%; position: relative; top: 6px; left: -23px;
+  }
+  .tree.t1 { left: 60px; }
+  .tree.t2 { left: 320px; }
+  .tree.t2 .canopy { width: 46px; height: 46px; left: -18px; background: radial-gradient(circle, #4caf50, #2e7d32); }
+  .tree.t2 .trunk { height: 40px; }
+  .tree.t3 { left: 580px; }
+  .tree.t3 .canopy { width: 62px; height: 62px; left: -26px; background: radial-gradient(circle, #66bb6a, #388e3c); }
+  .tree.t4 { left: 780px; }
+  .tree.t4 .canopy { width: 50px; height: 50px; left: -20px; background: radial-gradient(circle, #4caf50, #2e7d32); }
+  .tree.t4 .trunk { height: 42px; }
+
+  /* bench */
+  .bench {
+    position: absolute; bottom: 90px; left: 420px; z-index: 2;
+    width: 70px; height: 42px;
+    background: linear-gradient(to bottom, #8d6e63, #6d4c41);
+    border-radius: 3px 3px 6px 6px;
+  }
+  .bench::before, .bench::after {
+    content: ''; position: absolute; bottom: -16px; width: 8px; height: 16px;
+    background: #5d4037; border-radius: 0 0 2px 2px;
+  }
+  .bench::before { left: 10px; }
+  .bench::after { right: 10px; }
+
+  /* character container */
+  .walker-container {
+    position: absolute; bottom: 90px; left: 390px; z-index: 3;
+    width: 260px; height: 260px;
+  }
+  .walker-container svg { width: 100%; height: 100%; }
+
+  /* label */
+  .label {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.45); color: rgba(255,255,255,.85); padding: 5px 18px;
+    border-radius: 14px; font-size: 13px; letter-spacing: 2px; z-index: 5;
+    backdrop-filter: blur(4px);
+  }
+
+  /* shadows */
+  .shadow {
+    position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%);
+    width: 56px; height: 14px; background: rgba(0,0,0,.18); border-radius: 50%;
+    z-index: 2;
+  }
+
+  /* speed control */
+  .controls {
+    position: absolute; top: 16px; left: 20px; z-index: 10;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,0,0,.28); padding: 6px 14px; border-radius: 20px;
+    backdrop-filter: blur(6px);
+  }
+  .controls label { color: #fff; font-size: 12px; letter-spacing: 1px; }
+  .controls input[type=range] {
+    width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
+    background: rgba(255,255,255,.4); border-radius: 2px; outline: none;
+  }
+  .controls input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    background: #fff; border-radius: 50%; cursor: pointer;
+  }
+  .controls .speed-val { color: #fff; font-size: 12px; min-width: 30px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="sky">
+    <div class="sun"></div>
+    <div class="cloud c1"></div>
+    <div class="cloud c2"></div>
+    <div class="cloud c3"></div>
+  </div>
+  <div class="tree t1"><div class="canopy"></div><div class="trunk"></div></div>
+  <div class="tree t2"><div class="canopy"></div><div class="trunk"></div></div>
+  <div class="tree t3"><div class="canopy"></div><div class="trunk"></div></div>
+  <div class="tree t4"><div class="canopy"></div><div class="trunk"></div></div>
+  <div class="bench"></div>
+  <div class="grass-layer"></div>
+  <div class="ground">
+    <div class="path-edge"></div>
+    <div class="path"></div>
+  </div>
+  <div class="walker-container" id="walkerContainer">
+    <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg" id="charSvg">
+      <defs>
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000" flood-opacity="0.12"/>
+        </filter>
+      </defs>
+
+      <!-- 地面阴影 -->
+      <ellipse id="charShadow" cx="140" cy="212" rx="28" ry="6" fill="rgba(0,0,0,.15)"/>
+
+      <!-- 主角色组 -->
+      <g id="charBody" transform="translate(0, 0)">
+
+        <!-- ====== 远侧 (左) 肢体 (画在身体后面) ====== -->
+
+        <!-- 左大臂 (远侧) -->
+        <g id="armLUpperFar" transform="rotate(0, 118, 100)">
+          <line x1="125" y1="102" x2="114" y2="134" stroke="#d4b896" stroke-width="7" stroke-linecap="round" opacity=".78"/>
+          <!-- 左前臂 -->
+          <g id="armLLowerFar" transform="rotate(0, 114, 134)">
+            <line x1="114" y1="134" x2="110" y2="166" stroke="#d4b896" stroke-width="5.5" stroke-linecap="round" opacity=".78"/>
+            <circle cx="110" cy="168" r="4" fill="#e8c8a8" opacity=".78"/>
+          </g>
+        </g>
+
+        <!-- 左大腿 (远侧) -->
+        <g id="legLUpperFar" transform="rotate(0, 132, 172)">
+          <line x1="134" y1="172" x2="128" y2="220" stroke="#3a4048" stroke-width="9" stroke-linecap="round" opacity=".65"/>
+          <!-- 左小腿 -->
+          <g id="legLLowerFar" transform="rotate(0, 128, 220)">
+            <line x1="128" y1="220" x2="130" y2="265" stroke="#3a4048" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+            <!-- 左脚 (远侧) -->
+            <g transform="translate(128, 265)">
+              <ellipse cx="10" cy="1" rx="14" ry="5" fill="#1a1a1a" opacity=".65"/>
+            </g>
+          </g>
+        </g>
+
+        <!-- ====== 躯干 ====== -->
+        <g id="torso" transform="rotate(0, 140, 140)">
+          <!-- 躯干主体 -->
+          <path d="M120,100 Q118,102 118,106 L122,178 Q126,182 130,182 L160,180 Q164,178 160,102 Q158,98 150,96 Z"
+                fill="#6a8eb8" stroke="#5a7ea8" stroke-width="1.5"/>
+          <!-- 衣领 -->
+          <path d="M120,100 Q130,108 140,100 Q150,108 160,100" fill="none" stroke="#5a7ea8" stroke-width="2" stroke-linecap="round"/>
+          <!-- 衣扣 -->
+          <circle cx="140" cy="130" r="1.8" fill="#5a7ea8"/>
+          <circle cx="140" cy="148" r="1.8" fill="#5a7ea8"/>
+          <circle cx="140" cy="166" r="1.8" fill="#5a7ea8"/>
+          <!-- 轻微驼背线条 -->
+          <path d="M125,100 Q140,96 155,100" fill="none" stroke="rgba(0,0,0,.06)" stroke-width="1"/>
+        </g>
+
+        <!-- ====== 头部 ====== -->
+        <g id="head" transform="rotate(0, 148, 70)">
+          <!-- 头部主体 -->
+          <ellipse cx="148" cy="66" rx="17" ry="20" fill="#f0c8a0"/>
+          <!-- 白发 -->
+          <path d="M130,62 Q128,46 136,38 Q142,32 150,32 Q156,35 160,42 Q166,52 164,60"
+                fill="#d5d5d5" stroke="#c0c0c0" stroke-width=".5"/>
+          <path d="M130,62 Q133,54 138,48 Q143,42 150,40 Q154,41 158,46 Q161,52 164,60"
+                fill="#e8e8e8"/>
+          <!-- 耳朵 -->
+          <ellipse cx="130" cy="66" rx="5" ry="7" fill="#e8b890"/>
+          <!-- 眼睛 -->
+          <circle cx="155" cy="62" r="2.2" fill="#2c2c2c"/>
+          <circle cx="155" cy="62" r=".8" fill="#fff"/>
+          <!-- 眉毛 (花白) -->
+          <line x1="150" y1="56" x2="158" y2="55" stroke="#a0a0a0" stroke-width="2" stroke-linecap="round"/>
+          <!-- 鼻子 -->
+          <ellipse cx="163" cy="68" rx="3.5" ry="2.8" fill="#e8b890"/>
+          <!-- 嘴巴 (和蔼微笑) -->
+          <path d="M154,76 Q158,79 162,76" fill="none" stroke="#b07050" stroke-width="1.2" stroke-linecap="round"/>
+          <!-- 皱纹 (鱼尾纹 + 法令纹) -->
+          <path d="M152,58 Q149,58 148,59" fill="none" stroke="rgba(0,0,0,.08)" stroke-width=".8"/>
+          <path d="M157,70 Q160,74 159,78" fill="none" stroke="rgba(0,0,0,.06)" stroke-width=".8"/>
+          <!-- 眼镜 (老花镜) -->
+          <ellipse cx="155" cy="62" rx="7" ry="6" fill="none" stroke="#444" stroke-width="1.2"/>
+          <line x1="148" y1="62" x2="130" y2="60" stroke="#444" stroke-width="1.2"/>
+        </g>
+
+        <!-- ====== 近侧 (右) 肢体 (画在身体前面) ====== -->
+
+        <!-- 右大臂 (近侧) -->
+        <g id="armRUpper" transform="rotate(0, 156, 100)">
+          <line x1="154" y1="102" x2="162" y2="132" stroke="#e8c8a8" stroke-width="7" stroke-linecap="round"/>
+          <!-- 右前臂 -->
+          <g id="armRLower" transform="rotate(0, 162, 132)">
+            <line x1="162" y1="132" x2="166" y2="166" stroke="#e8c8a8" stroke-width="5.5" stroke-linecap="round"/>
+            <circle cx="166" cy="168" r="4.2" fill="#f0c8a0"/>
+          </g>
+        </g>
+
+        <!-- 右大腿 (近侧) -->
+        <g id="legRUpper" transform="rotate(0, 148, 172)">
+          <line x1="146" y1="172" x2="150" y2="218" stroke="#4a5058" stroke-width="10" stroke-linecap="round"/>
+          <!-- 右小腿 -->
+          <g id="legRLower" transform="rotate(0, 150, 218)">
+            <line x1="150" y1="218" x2="148" y2="267" stroke="#4a5058" stroke-width="9" stroke-linecap="round"/>
+            <!-- 右脚 (近侧) -->
+            <g transform="translate(146, 265)">
+              <ellipse cx="10" cy="2" rx="15" ry="5.5" fill="#1a1a1a"/>
+              <ellipse cx="10" cy="1" rx="13" ry="4" fill="#2a2a2a"/>
+            </g>
+          </g>
+        </g>
+
+      </g>
+    </svg>
+  </div>
+
+  <div class="label">高龄老人日常行走监测</div>
+
+  <div class="controls">
+    <label>步速</label>
+    <input type="range" id="speedSlider" min="0.3" max="2.5" step="0.05" value="1">
+    <span class="speed-val" id="speedVal">1x</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  /* ========== 步态参数 (高龄老人特征) ========== */
+  const GAIT = {
+    cycleBase: 2000,       // 基础周期 ms (老年人步态慢)
+    hipMax: 17,            // 髋关节最大角度 (度) — 老年人步幅小
+    kneeSwingMax: 32,      // 膝关节摆动期最大弯曲
+    kneeStanceMin: 3,      // 膝关节支撑期微小弯曲 (减震)
+    shoulderMax: 11,       // 肩关节摆动幅度
+    elbowSwingMax: 9,      // 肘关节摆动期弯曲
+    torsoSway: 2.8,        // 躯干侧向摆动 (度)
+    torsoLeanBase: 5,      // 基础前倾 (老年人驼背)
+    bodyLift: 3.5,         // 身体上下起伏 (px)
+    bodyShift: 2.0,        // 身体左右移动 (px)
+    headStabilize: 0.55,   // 头部稳定系数 (越小越稳定)
+    shadowScale: 0.15,     // 阴影缩放幅度
+  };
+
+  /* ========== DOM 引用 ========== */
+  const els = {
+    charBody:      document.getElementById('charBody'),
+    torso:         document.getElementById('torso'),
+    head:          document.getElementById('head'),
+    legRUpper:     document.getElementById('legRUpper'),
+    legRLower:     document.getElementById('legRLower'),
+    legLUpperFar:  document.getElementById('legLUpperFar'),
+    legLLowerFar:  document.getElementById('legLLowerFar'),
+    armRUpper:     document.getElementById('armRUpper'),
+    armRLower:     document.getElementById('armRLower'),
+    armLUpperFar:  document.getElementById('armLUpperFar'),
+    armLLowerFar:  document.getElementById('armLLowerFar'),
+    shadow:        document.getElementById('charShadow'),
+    speedSlider:   document.getElementById('speedSlider'),
+    speedVal:      document.getElementById('speedVal'),
+  };
+
+  let speedMultiplier = 1.0;
+
+  /* ========== 关节枢轴坐标 (SVG viewBox 坐标系) ========== */
+  const PIVOT = {
+    // 大腿旋转中心 (髋关节)
+    hipR:    { x: 148, y: 172 },
+    hipL:    { x: 134, y: 172 },
+    // 小腿旋转中心 (膝关节, 在各自大腿组坐标系内)
+    kneeR:   { x: 150, y: 218 },
+    kneeL:   { x: 128, y: 220 },
+    // 大臂旋转中心 (肩关节)
+    shoulderR: { x: 155, y: 102 },
+    shoulderL: { x: 123, y: 102 },
+    // 前臂旋转中心 (肘关节, 在各自大臂组坐标系内)
+    elbowR:  { x: 162, y: 132 },
+    elbowL:  { x: 114, y: 134 },
+    // 躯干旋转中心
+    torsoCtr: { x: 140, y: 140 },
+    // 头部旋转中心 (颈部)
+    headCtr: { x: 148, y: 88 },
+  };
+
+  /* ========== 辅助函数 ========== */
+  function degToRad(d) { return d * Math.PI / 180; }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // 平滑的膝关节角度: 支撑期接近0, 摆动期弯曲
+  function kneeAngle(phase, maxBend, minBend) {
+    const s = Math.sin(phase);
+    // 摆动期: sin < 0 → 腿从后往前摆, 膝盖弯曲
+    // 支撑期: sin > 0 → 腿从前往后支撑, 膝盖基本伸直
+    const swingFactor = clamp(-s, 0, 1);      // 0(支撑) → 1(最大摆动)
+    const stanceBend = clamp(s, 0, 1) * minBend; // 支撑期微小弯曲
+    return swingFactor * maxBend + stanceBend;
+  }
+
+  /* ========== 应用 SVG 变换 ========== */
+  function setRot(el, angle, cx, cy) {
+    el.setAttribute('transform', `rotate(${angle.toFixed(2)}, ${cx}, ${cy})`);
+  }
+
+  function setTrans(el, dx, dy) {
+    el.setAttribute('transform', `translate(${dx.toFixed(2)}, ${dy.toFixed(2)})`);
+  }
+
+  /* ========== 主循环 ========== */
+  function animate(timestamp) {
+    const cycle = GAIT.cycleBase / speedMultiplier;
+    const phase = ((timestamp % cycle) / cycle) * Math.PI * 2;
+    const s  = Math.sin(phase);
+    const c  = Math.cos(phase);
+
+    /* ---- 髋关节角度 ---- */
+    // 右腿: phase=0 时最前, phase=π 时最后
+    const hipR = GAIT.hipMax * s;
+    const hipL = GAIT.hipMax * Math.sin(phase + Math.PI); // 反相
+
+    /* ---- 膝关节角度 ---- */
+    // 膝关节在摆动期弯曲, 支撑期接近伸直
+    const kneeR = kneeAngle(phase, GAIT.kneeSwingMax, GAIT.kneeStanceMin);
+    const kneeL = kneeAngle(phase + Math.PI, GAIT.kneeSwingMax, GAIT.kneeStanceMin);
+
+    /* ---- 肩关节角度 (与对侧腿反向) ---- */
+    // 右臂与左腿同相: 右臂前摆时左腿前摆
+    const shoulderR = GAIT.shoulderMax * Math.sin(phase + Math.PI);
+    const shoulderL = GAIT.shoulderMax * s;
+
+    /* ---- 肘关节角度 ---- */
+    // 前摆时肘微曲
+    const elbowR = clamp(Math.sin(phase + Math.PI), 0, 1) * GAIT.elbowSwingMax;
+    const elbowL = clamp(s, 0, 1) * GAIT.elbowSwingMax;
+
+    /* ---- 躯干侧倾 (骨盆-肩反向旋转) ---- */
+    const torsoSway = GAIT.torsoSway * Math.cos(phase);
+    // 基础前倾 + 微小步态波动
+    const torsoLean = GAIT.torsoLeanBase + 1.2 * Math.abs(Math.cos(phase));
+
+    /* ---- 身体起伏 ---- */
+    // 单支撑期身体最高, 双支撑期最低
+    const bodyLift = GAIT.bodyLift * Math.abs(Math.sin(phase));
+
+    /* ---- 身体侧移 (移向支撑腿) ---- */
+    const bodyShift = -GAIT.bodyShift * s;
+
+    /* ---- 头部稳定 (抵消躯干倾斜) ---- */
+    const headTilt = -torsoSway * GAIT.headStabilize;
+
+    /* ---- 阴影缩放 ---- */
+    const shadowSx = 1 + GAIT.shadowScale * (1 - Math.abs(s));
+    const shadowSy = 1 + GAIT.shadowScale * 0.5 * (1 - Math.abs(s));
+
+    /* ======== 应用所有变换 ======== */
+
+    // 身体组: 上下起伏 + 左右移动
+    setTrans(els.charBody, bodyShift, -bodyLift);
+
+    // 躯干: 前倾 + 侧倾
+    setRot(els.torso, -torsoLean + torsoSway, PIVOT.torsoCtr.x, PIVOT.torsoCtr.y);
+
+    // 头部: 抵消躯干倾斜保持面朝前方
+    setRot(els.head, headTilt, PIVOT.headCtr.x, PIVOT.headCtr.y);
+
+    // 右腿 (近侧)
+    setRot(els.legRUpper, hipR, PIVOT.hipR.x, PIVOT.hipR.y);
+    setRot(els.legRLower, -kneeR, PIVOT.kneeR.x, PIVOT.kneeR.y);
+
+    // 左腿 (远侧)
+    setRot(els.legLUpperFar, hipL, PIVOT.hipL.x, PIVOT.hipL.y);
+    setRot(els.legLLowerFar, -kneeL, PIVOT.kneeL.x, PIVOT.kneeL.y);
+
+    // 右臂 (近侧)
+    setRot(els.armRUpper, shoulderR, PIVOT.shoulderR.x, PIVOT.shoulderR.y);
+    setRot(els.armRLower, -elbowR, PIVOT.elbowR.x, PIVOT.elbowR.y);
+
+    // 左臂 (远侧)
+    setRot(els.armLUpperFar, shoulderL, PIVOT.shoulderL.x, PIVOT.shoulderL.y);
+    setRot(els.armLLowerFar, -elbowL, PIVOT.elbowL.x, PIVOT.elbowL.y);
+
+    // 阴影
+    els.shadow.setAttribute('transform',
+      `translate(${bodyShift.toFixed(2)}, ${(-bodyLift * 0.3).toFixed(2)}) scale(${shadowSx.toFixed(2)}, ${shadowSy.toFixed(2)})`);
+
+    requestAnimationFrame(animate);
+  }
+
+  /* ========== 速度控制 ========== */
+  els.speedSlider.addEventListener('input', function() {
+    speedMultiplier = parseFloat(this.value);
+    els.speedVal.textContent = speedMultiplier.toFixed(2) + 'x';
+  });
+
+  /* ========== 启动 ========== */
+  requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

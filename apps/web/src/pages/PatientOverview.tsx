@@ -8,7 +8,7 @@ import {
   IconMessageCircle, IconMoon, IconTimeline, IconWalk,
 } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { tr } from '../lib/metrics'
 import { http } from '../api/client'
 
 const ALERT_COLORS: Record<string, string> = { critical: 'red', warning: 'orange', info: 'blue' }
@@ -70,7 +70,7 @@ export function PatientOverview({ patientId }: { patientId: string; latest?: any
           <SimpleGrid cols={3} mb="md">
             {(data?.latestVitals || []).slice(0, 9).map((v) => (
               <Paper key={v.metric} p="xs" withBorder style={{ background: 'rgba(0,0,0,0.01)' }}>
-                <Text size="xs" c="dimmed">{v.metric}</Text>
+                <Text size="xs" c="dimmed">{tr(v.metric)}</Text>
                 <Text fw={600} size="sm">{String(v.value ?? '-')}{v.unit ? ` ${v.unit}` : ''}</Text>
               </Paper>
             ))}
@@ -109,7 +109,7 @@ export function PatientOverview({ patientId }: { patientId: string; latest?: any
                 {(data?.alerts || []).map((a) => (
                   <Group key={a.id} gap="xs" py={4} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                     <Badge size="sm" variant="filled" color={ALERT_COLORS[a.severity || 'info'] || 'blue'}>{ALERT_LABELS[a.severity || 'info'] || a.severity}</Badge>
-                    <Text size="xs" fw={500}>{a.metric}: {String(a.value ?? '-')}</Text>
+                    <Text size="xs" fw={500}>{tr(a.metric)}: {String(a.value ?? '-')}</Text>
                     <Text size="xs" c="dimmed" style={{ flex: 1 }}>{a.source || ''}</Text>
                     <Text size="xs" c="dimmed">{timeAgo(a.recorded_at)}</Text>
                   </Group>

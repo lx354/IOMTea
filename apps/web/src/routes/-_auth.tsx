@@ -4,11 +4,11 @@ import {
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import {
-  IconActivity, IconAlertTriangle, IconBrain,
+  IconActivity, IconAlertTriangle, IconBrain, IconRun,
   IconBuildingFactory, IconChartBar, IconClipboardList, IconClipboardText,
-  IconDownload, IconGitBranch, IconKey, IconLayoutDashboard, IconLogout,
-  IconMessageCircle, IconSchool, IconShield, IconSparkles,
-  IconUsers, IconUsersGroup, IconVideo,
+  IconDownload, IconGitBranch, IconHeartbeat, IconLayoutDashboard, IconLogout,
+  IconMessageCircle, IconShield, IconSparkles, IconThermometer,
+  IconUsers, IconUsersGroup,
 } from '@tabler/icons-react'
 import { Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useAuthStore } from '../store/auth'
@@ -25,66 +25,50 @@ const ROLE_COLORS: Record<string, string> = {
 
 const navGroups: NavGroup[] = [
   {
-    label: '概览',
+    label: '物理层映射',
     items: [
-      { label: '工作台', icon: IconLayoutDashboard, path: '/' },
-      { label: '虚拟镜像', icon: IconVideo, path: '/mirror' },
+      { label: '生命体征监测', icon: IconHeartbeat, path: '/vital-monitor' },
+      { label: '环境安全监测', icon: IconThermometer, path: '/env-monitor' },
+      { label: '行为与活动监测', icon: IconRun, path: '/activity-monitor' },
+      { label: '设备监控', icon: IconActivity, path: '/device-monitor' },
+    ],
+    roles: ['super_admin', 'admin', 'nurse', 'doctor'],
+  },
+  {
+    label: '虚拟层映射',
+    items: [
+      { label: '虚拟镜像', icon: IconActivity, path: '/mirror' },
     ],
     roles: ['super_admin', 'admin', 'family', 'nurse', 'doctor'],
   },
   {
-    label: '数据大屏',
+    label: '算法层映射',
     items: [
-      { label: '3D 数字孪生', icon: IconChartBar, path: '/data-dashboard' },
+      { label: '健康趋势图', icon: IconChartBar, path: '/health-trends' },
+      { label: '异常事件列表', icon: IconAlertTriangle, path: '/abnormal-events' },
+      { label: '认知预测引擎', icon: IconBrain, path: '/cognitive-prediction' },
     ],
     roles: ['super_admin', 'admin', 'nurse', 'doctor'],
   },
   {
-    label: '管理',
+    label: '应用层映射',
     items: [
-      { label: '患者管理', icon: IconUsers, path: '/patients' },
-      { label: '计划管理', icon: IconClipboardList, path: '/plans' },
-      { label: '量表管理', icon: IconClipboardText, path: '/forms' },
-    ],
-    roles: ['super_admin', 'admin'],
-  },
-  {
-    label: '数字孪生',
-    items: [
-      { label: '状态矩阵', icon: IconActivity, path: '/twin' },
       { label: '对话孪生', icon: IconMessageCircle, path: '/chat' },
-      { label: '行为识别', icon: IconBrain, path: '/behavior' },
-      { label: '警告看板', icon: IconAlertTriangle, path: '/alerts' },
-      { label: '关系图谱', icon: IconGitBranch, path: '/node-graph' },
       { label: '智慧建议', icon: IconSparkles, path: '/suggestions' },
+      { label: '计划管理', icon: IconClipboardList, path: '/plans' },
     ],
-    roles: ['super_admin', 'admin', 'nurse', 'doctor'],
-  },
-  {
-    label: '模拟训练',
-    items: [
-      { label: '模拟工厂', icon: IconBuildingFactory, path: '/simulation' },
-    ],
-    roles: ['super_admin', 'admin'],
-  },
-  {
-    label: '照护工具',
-    items: [
-      { label: '场景训练', icon: IconSchool, path: '/chat' },
-    ],
-    roles: ['super_admin', 'admin', 'nurse'],
-  },
-  {
-    label: '设备与数据',
-    items: [
-      { label: 'PIN 管理', icon: IconKey, path: '/iot/pins' },
-      { label: '数据导出', icon: IconDownload, path: '/data-export' },
-    ],
-    roles: ['super_admin', 'admin', 'doctor'],
+    roles: ['super_admin', 'admin', 'family', 'nurse', 'doctor'],
   },
   {
     label: '系统',
     items: [
+      { label: '工作台', icon: IconLayoutDashboard, path: '/' },
+      { label: '量表管理', icon: IconClipboardText, path: '/forms' },
+      { label: '状态矩阵', icon: IconActivity, path: '/twin' },
+      { label: '模拟工厂', icon: IconBuildingFactory, path: '/simulation' },
+      { label: '警告看板', icon: IconAlertTriangle, path: '/alerts' },
+      { label: '关系图谱', icon: IconGitBranch, path: '/node-graph' },
+      { label: '数据导出', icon: IconDownload, path: '/data-export' },
       { label: '用户管理', icon: IconUsersGroup, path: '/settings/users' },
       { label: '权限管理', icon: IconShield, path: '/settings/rbac' },
     ],

@@ -7,8 +7,15 @@ import {
 } from '@tanstack/react-router'
 import { NodeGraph } from './components/NodeGraph'
 import { AlertBoard } from './pages/AlertBoard'
-import { BehaviorMonitor } from './pages/BehaviorMonitor'
 import { ChatPanel } from './pages/ChatPanel'
+import { DeviceMonitor } from './pages/DeviceMonitor'
+import { HealthTrendsPage } from './pages/HealthTrendsPage'
+import { AbnormalEventsPage } from './pages/AbnormalEventsPage'
+import { CognitivePredictor } from './pages/CognitivePredictor'
+import { VitalMonitor } from './pages/VitalMonitor'
+import { EnvMonitor } from './pages/EnvMonitor'
+import { ActivityMonitor } from './pages/ActivityMonitor'
+import { HomeFloorplan } from './pages/HomeFloorplan'
 import { SuggestionsPanel } from './pages/SuggestionsPanel'
 import { MirrorPage } from './pages/MirrorPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -24,7 +31,6 @@ import { PatientProfile } from './pages/PatientProfile'
 import { PatientFormsTab } from './pages/PatientFormsTab'
 import { PatientUsers } from './pages/PatientUsers'
 import { PatientWall } from './pages/PatientWall'
-import { PinManagementPage } from './pages/PinManagementPage'
 import { PlanManagementPage } from './pages/PlanManagementPage'
 import { RbacManagementPage } from './pages/RbacManagementPage'
 import { SimulationPage } from './pages/SimulationPage'
@@ -125,12 +131,6 @@ const alertsRoute = createRoute({
   component: AlertBoard,
 })
 
-const pinsRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: '/iot/pins',
-  component: PinManagementPage,
-})
-
 const twinRoute = createRoute({
   getParentRoute: () => authRoute,
   path: '/twin',
@@ -143,12 +143,6 @@ const chatRoute = createRoute({
   component: ChatPanel,
 })
 
-const behaviorRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: '/behavior',
-  component: BehaviorMonitor,
-})
-
 const suggestionsRoute = createRoute({
   getParentRoute: () => authRoute,
   path: '/suggestions',
@@ -159,6 +153,40 @@ const mirrorRoute = createRoute({
   getParentRoute: () => authRoute,
   path: '/mirror',
   component: MirrorPage,
+})
+
+const deviceMonitorRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/device-monitor',
+  component: DeviceMonitor,
+})
+
+const healthTrendsRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/health-trends',
+  component: HealthTrendsPage,
+})
+
+const abnormalEventsRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/abnormal-events',
+  component: AbnormalEventsPage,
+})
+
+const cognitivePredictionRoute = createRoute({
+  getParentRoute: () => authRoute,
+  path: '/cognitive-prediction',
+  component: CognitivePredictor,
+})
+
+const vitalMonitorRoute = createRoute({
+  getParentRoute: () => authRoute, path: '/vital-monitor', component: VitalMonitor,
+})
+const envMonitorRoute = createRoute({
+  getParentRoute: () => authRoute, path: '/env-monitor', component: EnvMonitor,
+})
+const activityMonitorRoute = createRoute({
+  getParentRoute: () => authRoute, path: '/activity-monitor', component: ActivityMonitor,
 })
 
 const simRoute = createRoute({
@@ -203,24 +231,19 @@ const routeTree = rootRoute.addChildren([
     dashboardRoute,
     dataDashboardRoute,
     dataExportRoute,
-    patientsRoute,
-    patientDetailRoute.addChildren([
-      pOverviewRoute,
-      pProfileRoute,
-      pAlertsRoute,
-      pRulesRoute,
-      pTimelineRoute,
-      pUsersRoute,
-      pFormsRoute,
-    ]),
     alertsRoute,
-    pinsRoute,
     simRoute,
     twinRoute,
     chatRoute,
-    behaviorRoute,
     suggestionsRoute,
     mirrorRoute,
+    deviceMonitorRoute,
+    healthTrendsRoute,
+    abnormalEventsRoute,
+    cognitivePredictionRoute,
+    vitalMonitorRoute,
+    envMonitorRoute,
+    activityMonitorRoute,
     usersRoute,
     rbacRoute,
     nodeGraphRoute,

@@ -14,6 +14,7 @@ export interface MirrorSnapshot {
   keypoints: PostureKeypoints
   posture: PostureReport
   activity: string
+  behavior: string | null  // standing/sitting/lying etc.
   position: { x: number; y: number; room: string }
   source: string
 }
@@ -34,6 +35,7 @@ export function updateMirror(
     keypoints,
     posture,
     activity: posture.metrics.slice(3, 5).map((m: { label: string }) => m.label).join(','),
+    behavior: null,
     position: { x: keypoints.left_hip?.[0] ?? 0.5, y: keypoints.left_hip?.[1] ?? 0.5, room },
     source,
   }

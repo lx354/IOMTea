@@ -7,7 +7,9 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "electron": "pnpm --filter iomtea-electron start",
+    "package": "pnpm --filter iomtea-electron dist"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

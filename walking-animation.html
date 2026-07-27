@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行走动画</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  const W = 520, H = 560;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+
+  /* ========== PROPORTIONS (side view, facing right) ========== */
+  const B = {
+    headW: 36, headH: 44,
+    neckLen: 10, neckW: 10,
+    torsoLen: 112,
+    thighLen: 86, thighW: 26,
+    shankLen: 82, shankW: 22,
+    footLen: 30, footW: 8,
+    upperArmLen: 56, upperArmW: 18,
+    forearmLen: 52, forearmW: 14,
+    handLen: 10, handW: 6,
+    depthOffY: 5, depthOffX: 3,
+  };
+
+  /* ========== ELDERLY GAIT PARAMS ========== */
+  const G = {
+    cycleMs: 1950,
+    hipFlex: 24, hipExt: 9,
+    kneeSwing: 46, kneeLoad: 7,
+    shoulderAmp: 13,
+    elbowBase: 26, elbowMod: 6,
+    vertAmp: 4.2,
+    stanceFrac: 0.65,
+    headStab: 0.35,
+    ankleDorsi: 5, anklePlantar: 12,
+    forwardLean: 7,
+  };
+
+  const COL = {
+    near: '#2a2a2a',
+    far: '#a8a8a8',
+    torso: '#222222',
+    head: '#2a2a2a',
+  };
+
+  /* ========== HELPERS ========== */
+  const d2r = d => d * Math.PI / 180;
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+  function smoothstep(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+  function sinBump(x, lo, hi) { return (x > lo && x < hi) ? Math.sin(Math.PI * (x - lo) / (hi - lo)) : 0; }
+
+  /* ========== GAIT FUNCTIONS (return radians) ========== */
+  /* t ∈ [0,1): normalized cycle, 0 = right heel strike */
+
+  function hipAngle(t) {
+    const c = (G.hipFlex - G.hipExt) / 2;
+    const a = (G.hipFlex + G.hipExt) / 2;
+    return d2r(c + a * Math.cos(2 * Math.PI * t));
+  }
+
+  function kneeAngle(t) {
+    const sf = G.stanceFrac;
+    let a = 3 + G.kneeLoad * sinBump(t, 0, 0.11);
+    if (t > sf) {
+      const s = (t - sf) / (1 - sf);
+      const pk = 0.55;
+      a += s < pk
+        ? G.kneeSwing * Math.sin(Math.PI / 2 * s / pk)
+        : G.kneeSwing * Math.cos(Math.PI / 2 * (s - pk) / (1 - pk));
+    }
+    return d2r(a);
+  }
+
+  function ankleAngle(t) {
+    const sf = G.stanceFrac;
+    if (t < sf) {
+      const s = t / sf;
+      const dorsi = G.ankleDorsi * Math.sin(Math.PI * s * 0.7) * (1 - s);
+      const plantar = s > 0.4 ? G.anklePlantar * smoothstep(0.4, 1, s) : 0;
+      return d2r(-2 + plantar - dorsi);
+    }
+    const ss = (t - sf) / (1 - sf);
+    return d2r(G.anklePlantar * (1 - ss) - 2);
+  }
+
+  function shoulderAngle(t) { return d2r(-G.shoulderAmp * Math.cos(2 * Math.PI * t)); }
+  function elbowAngle(t) { return d2r(G.elbowBase + G.elbowMod * (1 - Math.cos(2 * Math.PI * t)) / 2); }
+  function vertShift(t) { return -G.vertAmp * Math.cos(4 * Math.PI * t); }
+
+  /* ========== SKELETON ========== */
+  function skeleton(t) {
+    const cx = W / 2;
+    const baseY = H * 0.40;
+    const rootY = baseY + vertShift(t);
+    const lean = d2r(G.forwardLean);
+
+    /* torso axis */
+    const shCX = cx + B.torsoLen * Math.sin(lean);
+    const shCY = rootY - B.torsoLen * Math.cos(lean);
+
+    /* near-side (right) joint roots */
+    const sNx = shCX + 1, sNy = shCY + 1;
+    const hNx = cx + 1, hNy = rootY;
+
+    /* far-side (left) joint roots */
+    const sFx = shCX - B.depthOffX, sFy = shCY - B.depthOffY;
+    const hFx = cx - B.depthOffX, hFy = rootY - B.depthOffY;
+
+    /* ---- right leg ---- */
+    const taR = hipAngle(t);
+    const kaR = kneeAngle(t);
+    const aaR = ankleAngle(t);
+
+    const kRx = hNx + B.thighLen * Math.sin(taR);
+    const kRy = hNy + B.thighLen * Math.cos(taR);
+    const saR = taR - kaR;
+    const aRx = kRx + B.shankLen * Math.sin(saR);
+    const aRy = kRy + B.shankLen * Math.cos(saR);
+    const heelRx = aRx - B.footLen * 0.3 * Math.cos(aaR);
+    const heelRy = aRy - B.footLen * 0.3 * Math.sin(aaR);
+    const toeRx = aRx + B.footLen * 0.7 * Math.cos(aaR);
+    const toeRy = aRy + B.footLen * 0.7 * Math.sin(aaR);
+
+    /* ---- left leg ---- */
+    const taL = hipAngle(t + 0.5);
+    const kaL = kneeAngle(t + 0.5);
+    const aaL = ankleAngle(t + 0.5);
+
+    const kLx = hFx + B.thighLen * Math.sin(taL);
+    const kLy = hFy + B.thighLen * Math.cos(taL);
+    const saL = taL - kaL;
+    const aLx = kLx + B.shankLen * Math.sin(saL);
+    const aLy = kLy + B.shankLen * Math.cos(saL);
+    const heelLx = aLx - B.footLen * 0.3 * Math.cos(aaL);
+    const heelLy = aLy - B.footLen * 0.3 * Math.sin(aaL);
+    const toeLx = aLx + B.footLen * 0.7 * Math.cos(aaL);
+    const toeLy = aLy + B.footLen * 0.7 * Math.sin(aaL);
+
+    /* ---- right arm ---- */
+    const shA_R = shoulderAngle(t);
+    const elA_R = elbowAngle(t);
+    const eRx = sNx + B.upperArmLen * Math.sin(shA_R);
+    const eRy = sNy + B.upperArmLen * Math.cos(shA_R);
+    const faR = shA_R - elA_R;
+    const wRx = eRx + B.forearmLen * Math.sin(faR);
+    const wRy = eRy + B.forearmLen * Math.cos(faR);
+    const hndRx = wRx + B.handLen * Math.sin(faR);
+    const hndRy = wRy + B.handLen * Math.cos(faR);
+
+    /* ---- left arm ---- */
+    const shA_L = shoulderAngle(t + 0.5);
+    const elA_L = elbowAngle(t + 0.5);
+    const eLx = sFx + B.upperArmLen * Math.sin(shA_L);
+    const eLy = sFy + B.upperArmLen * Math.cos(shA_L);
+    const faL = shA_L - elA_L;
+    const wLx = eLx + B.forearmLen * Math.sin(faL);
+    const wLy = eLy + B.forearmLen * Math.cos(faL);
+    const hndLx = wLx + B.handLen * Math.sin(faL);
+    const hndLy = wLy + B.handLen * Math.cos(faL);
+
+    /* ---- head ---- */
+    const neckX = shCX + B.neckLen * Math.sin(lean);
+    const neckY = shCY - B.neckLen * Math.cos(lean);
+    const headBaseY = baseY - B.torsoLen - B.neckLen - B.headH / 2;
+    const headX = neckX + 2;
+    const headY = headBaseY + vertShift(t) * G.headStab;
+
+    return {
+      shC: { x: shCX, y: shCY }, hC: { x: cx, y: rootY },
+      sN: { x: sNx, y: sNy }, sF: { x: sFx, y: sFy },
+      hN: { x: hNx, y: hNy }, hF: { x: hFx, y: hFy },
+      kN: { x: kRx, y: kRy }, kF: { x: kLx, y: kLy },
+      aN: { x: aRx, y: aRy }, aF: { x: aLx, y: aLy },
+      heelN: { x: heelRx, y: heelRy }, heelF: { x: heelLx, y: heelLy },
+      toeN: { x: toeRx, y: toeRy }, toeF: { x: toeLx, y: toeLy },
+      eN: { x: eRx, y: eRy }, eF: { x: eLx, y: eLy },
+      wN: { x: wRx, y: wRy }, wF: { x: wLx, y: wLy },
+      hndN: { x: hndRx, y: hndRy }, hndF: { x: hndLx, y: hndLy },
+      neck: { x: neckX, y: neckY },
+      head: { x: headX, y: headY },
+    };
+  }
+
+  /* ========== RENDERING ========== */
+
+  function capsule(ctx, a, b, w, color) {
+    if (w < 0.5) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  function jointDot(ctx, p, r, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawTorso(ctx, sk) {
+    const tx = sk.shC.x, ty = sk.shC.y;
+    const bx = sk.hC.x, by = sk.hC.y;
+    const len = by - ty;
+    if (len < 5) return;
+    const L = len;
+
+    ctx.fillStyle = COL.torso;
+    ctx.beginPath();
+
+    /* back: upper-back bulge → waist → buttocks */
+    ctx.moveTo(tx - 14, ty);
+    ctx.bezierCurveTo(tx - 18, ty + L * 0.28, tx - 10, ty + L * 0.60, tx + 12, ty + L * 0.90);
+
+    /* bottom: buttocks → hip */
+    ctx.quadraticCurveTo(tx + 2, by + 5, bx - 3, by);
+
+    /* front: groin → belly → chest → neck */
+    ctx.bezierCurveTo(tx - 4, ty + L * 0.89, tx + 12, ty + L * 0.42, tx + 6, ty + L * 0.04);
+
+    /* top: front neck → back neck */
+    ctx.quadraticCurveTo(tx, ty - 8, tx - 14, ty);
+
+    ctx.fill();
+  }
+
+  function drawLimb(ctx, a, b, c, wA, wB, wC, color) {
+    capsule(ctx, a, b, wA, color);
+    capsule(ctx, b, c, wB, color);
+    jointDot(ctx, b, Math.max(wA, wB) * 0.5, color);
+  }
+
+  function drawFigure(ctx, sk) {
+    /* ---- far limbs (behind torso) ---- */
+    const fw = 0.7;
+    drawLimb(ctx, sk.hF, sk.kF, sk.aF, B.thighW * fw, B.shankW * fw, 0, COL.far);
+    capsule(ctx, sk.heelF, sk.toeF, B.footW * fw, COL.far);
+    jointDot(ctx, sk.hF, B.thighW * fw * 0.5, COL.far);
+    jointDot(ctx, sk.aF, B.shankW * fw * 0.5, COL.far);
+
+    drawLimb(ctx, sk.sF, sk.eF, sk.wF, B.upperArmW * fw, B.forearmW * fw, 0, COL.far);
+    capsule(ctx, sk.wF, sk.hndF, B.handW * fw, COL.far);
+    jointDot(ctx, sk.sF, B.upperArmW * fw * 0.5, COL.far);
+
+    /* ---- torso ---- */
+    drawTorso(ctx, sk);
+
+    /* ---- near limbs (in front of torso) ---- */
+    drawLimb(ctx, sk.hN, sk.kN, sk.aN, B.thighW, B.shankW, 0, COL.near);
+    capsule(ctx, sk.heelN, sk.toeN, B.footW, COL.near);
+    jointDot(ctx, sk.hN, B.thighW * 0.5, COL.near);
+    jointDot(ctx, sk.kN, B.thighW * 0.5, COL.near);
+    jointDot(ctx, sk.aN, B.shankW * 0.5, COL.near);
+
+    drawLimb(ctx, sk.sN, sk.eN, sk.wN, B.upperArmW, B.forearmW, 0, COL.near);
+    capsule(ctx, sk.wN, sk.hndN, B.handW, COL.near);
+    jointDot(ctx, sk.sN, B.upperArmW * 0.5, COL.near);
+    jointDot(ctx, sk.eN, B.upperArmW * 0.5, COL.near);
+    jointDot(ctx, sk.wN, B.forearmW * 0.5, COL.near);
+
+    /* ---- neck ---- */
+    capsule(ctx, sk.shC, sk.neck, B.neckW, COL.near);
+    jointDot(ctx, sk.neck, B.neckW * 0.5, COL.near);
+
+    /* ---- head ---- */
+    ctx.fillStyle = COL.head;
+    ctx.beginPath();
+    ctx.ellipse(sk.head.x, sk.head.y, B.headW / 2, B.headH / 2, 0.06, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /* ========== LOOP ========== */
+  let raf, start = null;
+
+  function loop(ts) {
+    if (start === null) start = ts;
+    const t = ((ts - start) % G.cycleMs) / G.cycleMs;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const sk = skeleton(t);
+    drawFigure(ctx, sk);
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  raf = requestAnimationFrame(loop);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && raf) { cancelAnimationFrame(raf); raf = null; start = null; }
+    else if (!document.hidden && !raf) raf = requestAnimationFrame(loop);
+  });
+})();
+</script>
+</body>
+</html>
